@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>南邮校园网设置</title>
+<title>校园网自动登录设置</title>
 <style>
   :root{
     --navy:#0b1b3a;
@@ -109,6 +109,19 @@
   }
   .hint{margin:7px 0 0;color:var(--muted);font-size:12px}
   .carriers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .mode{position:relative;cursor:pointer}
+  .mode input{position:absolute;opacity:0;pointer-events:none}
+  .mode span{
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:9px 6px;border:1.5px solid var(--line);border-radius:12px;
+    background:#fff;transition:.18s;text-align:center;
+  }
+  .mode b{font-size:12.5px;color:#334155}
+  .mode small{font-size:10.5px;color:#94a3b8}
+  .mode input:checked + span{border-color:var(--blue);background:#eff6ff;box-shadow:0 6px 16px rgba(37,99,235,.10)}
+  .mode input:checked + span b{color:var(--blue-2)}
+  .mode input:focus-visible + span{outline:2px solid rgba(37,99,235,.45);outline-offset:2px}
   .carrier{position:relative;cursor:pointer}
   .carrier input{position:absolute;opacity:0;pointer-events:none}
   .carrier .box{
@@ -182,15 +195,15 @@
 <body>
 <main class="app">
   <aside class="brand">
-    <div class="logo"><span class="dot"></span>NJUPT · CAMPUS NET</div>
+    <div class="logo"><span class="dot"></span>DR.COM · CAMPUS NET</div>
     <h1>校园网<br><span>自动登录</span></h1>
-    <p class="sub">南京邮电大学 · Dr.COM 认证</p>
+    <p class="sub">校园网 · Dr.COM 认证</p>
     <ul class="features">
       <li><span class="ico">⚡</span><span>开机自动连接，无需再手选运营商</span></li>
       <li><span class="ico">🔒</span><span>密码仅保存在本机，Windows DPAPI 加密</span></li>
       <li><span class="ico">🎮</span><span>后台静默运行，不弹窗、不打扰游戏</span></li>
     </ul>
-    <div class="bottom">账号密码不会上传到任何服务器<br>只用于本机访问 p.njupt.edu.cn</div>
+    <div class="bottom">账号密码不会上传到任何服务器<br>支持南邮新版与通用 Dr.COM 门户</div>
   </aside>
 
   <section class="panel">
@@ -201,6 +214,24 @@
     </div>
 
     <form id="form" autocomplete="off">
+      <div class="field">
+        <span class="field-label">认证方式</span>
+        <div class="modes" role="radiogroup" aria-label="认证方式">
+          <label class="mode">
+            <input type="radio" name="mode" value="auto" checked>
+            <span><b>自动识别</b><small>推荐</small></span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="mode" value="njupt">
+            <span><b>南邮 Dr.COM</b><small>新版门户</small></span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="mode" value="drcom">
+            <span><b>通用 Dr.COM</b><small>InterFace</small></span>
+          </label>
+        </div>
+      </div>
+
       <div class="field">
         <label for="account">学号 / 账号</label>
         <div class="input">
@@ -219,7 +250,7 @@
         <p class="hint" id="pwdHint">密码会用 Windows DPAPI 加密后保存在本机。</p>
       </div>
 
-      <div class="field">
+      <div class="field" id="suffixField">
         <span class="field-label">运营商</span>
         <div class="carriers" role="radiogroup" aria-label="运营商">
           <label class="carrier">
@@ -235,6 +266,22 @@
             <span class="box"><span class="em">🌐</span><span class="name">中国电信</span><span class="tag">@njxy</span></span>
           </label>
         </div>
+      </div>
+
+      <div class="field" id="drcomFields">
+        <label for="portalUrl">认证页地址</label>
+        <div class="input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.4 2.4 3.6 5.3 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.3-3.6-8.5S9.6 5.9 12 3.5z"/></svg>
+          <input id="portalUrl" name="portalUrl" placeholder="http://1.1.1.1/" spellcheck="false">
+        </div>
+        <p class="hint">通用 Dr.COM 门户地址；留空默认 http://1.1.1.1/</p>
+
+        <label for="service" style="margin-top:13px">服务名（可选）</label>
+        <div class="input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+          <input id="service" name="service" placeholder="留空使用门户默认服务" spellcheck="false">
+        </div>
+        <p class="hint">例如“校园网”“中国移动”；不确定就留空。</p>
       </div>
 
       <div class="actions">
@@ -305,6 +352,24 @@
     return el ? el.value : '';
   }
 
+  function getMode() {
+    const el = document.querySelector('input[name="mode"]:checked');
+    return el ? el.value : 'auto';
+  }
+
+  function setMode(value) {
+    document.querySelectorAll('input[name="mode"]').forEach((r) => {
+      r.checked = r.value === value;
+    });
+    updateModeFields();
+  }
+
+  function updateModeFields() {
+    const mode = getMode();
+    $('#suffixField').style.display = mode === 'drcom' ? 'none' : '';
+    $('#drcomFields').style.display = mode === 'drcom' ? '' : 'none';
+  }
+
   function setBusy(busy) {
     document.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
     document.body.classList.toggle('busy', busy);
@@ -314,8 +379,11 @@
     try {
       const d = await api('/api/status');
       $('#account').value = d.account || '';
+      $('#portalUrl').value = d.portalUrl || '';
+      $('#service').value = d.service || '';
       hasPassword = !!d.hasPassword;
       selectCarrier(d.suffix || '');
+      setMode(d.mode || 'auto');
       if (hasPassword) {
         $('#password').placeholder = '已保存，留空则不修改';
         $('#pwdHint').textContent = '已保存密码；留空表示不修改。';
@@ -329,16 +397,22 @@
     const account = $('#account').value.trim();
     const password = $('#password').value;
     const suffix = getCarrier();
+    const mode = getMode();
+    const portalUrl = $('#portalUrl').value.trim();
+    const service = $('#service').value.trim();
 
     if (!account) { setStatus('请输入学号或账号。', 'err'); $('#account').focus(); return; }
     if (!password && !hasPassword) { setStatus('第一次使用，请输入校园网密码。', 'err'); $('#password').focus(); return; }
+    if (portalUrl && !/^https?:\/\//i.test(portalUrl)) {
+      setStatus('认证页地址需要以 http:// 或 https:// 开头。', 'err'); $('#portalUrl').focus(); return;
+    }
 
     setBusy(true);
     setStatus('正在保存…', 'info', true);
     try {
       await api('/api/save', {
         method: 'POST',
-        body: JSON.stringify({ account, password, suffix })
+        body: JSON.stringify({ account, password, suffix, mode, portalUrl, service })
       });
       if (password) {
         hasPassword = true;
@@ -363,6 +437,9 @@
 
   $('#form').addEventListener('submit', (e) => { e.preventDefault(); save(false); });
   $('#test').addEventListener('click', () => save(true));
+  document.querySelectorAll('input[name="mode"]').forEach((r) => {
+    r.addEventListener('change', updateModeFields);
+  });
 
   $('#peek').addEventListener('click', () => {
     const p = $('#password');
@@ -381,3 +458,4 @@
 </script>
 </body>
 </html>
+

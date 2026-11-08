@@ -48,13 +48,20 @@ function Send-Error {
 function Get-SavedSettings {
     $account = ''
     $suffix = ''
+    $mode = 'auto'
+    $portalUrl = ''
+    $service = ''
     if (Test-Path -LiteralPath $SettingsFile) {
         foreach ($line in Get-Content -LiteralPath $SettingsFile -Encoding UTF8) {
             if ($line -match '^\s*Account\s*=\s*(.*)$') { $account = $matches[1].Trim() }
             elseif ($line -match '^\s*Suffix\s*=\s*(.*)$') { $suffix = $matches[1].Trim() }
+            elseif ($line -match '^\s*Mode\s*=\s*(.*)$') { $mode = $matches[1].Trim() }
+            elseif ($line -match '^\s*PortalUrl\s*=\s*(.*)$') { $portalUrl = $matches[1].Trim() }
+            elseif ($line -match '^\s*Service\s*=\s*(.*)$') { $service = $matches[1].Trim() }
         }
     }
-    return [pscustomobject]@{ Account = $account; Suffix = $suffix }
+    if ($mode -notin @('auto', 'njupt', 'drcom')) { $mode = 'auto' }
+    return [pscustomobject]@{ Account = $account; Suffix = $suffix; Mode = $mode; PortalUrl = $portalUrl; Service = $service }
 }
 
 function Test-SavedPassword {
@@ -73,12 +80,15 @@ function Save-Credential {
 }
 
 function Save-Settings {
-    param([string]$Account, [string]$Suffix)
+    param([string]$Account, [string]$Suffix, [string]$Mode, [string]$PortalUrl, [string]$Service)
     $lines = @(
-        '# 南邮校园网自动登录配置',
-        '# 校园网（不填后缀）：Suffix=',
-        '# 中国电信：Suffix=@njxy',
-        '# 中国移动：Suffix=@cmcc',
+        '# 校园网自动登录配置',
+        '# Mode: auto / njupt / drcom',
+        '# 南邮：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
+        '# 通用 Dr.COM：PortalUrl=http://1.1.1.1/，Service 可留空',
+        "Mode=$Mode",
+        "PortalUrl=$PortalUrl",
+        "Service=$Service",
         "Account=$Account",
         "Suffix=$Suffix"
     )
@@ -185,6 +195,9 @@ while ($running) {
                 ok          = $true
                 account     = $saved.Account
                 suffix      = $saved.Suffix
+                mode        = $saved.Mode
+                portalUrl   = $saved.PortalUrl
+                service     = $saved.Service
                 hasPassword = (Test-SavedPassword)
             }
             continue
@@ -200,16 +213,31 @@ while ($running) {
             $account = [string]$data.account
             $password = [string]$data.password
             $suffix = [string]$data.suffix
+            $mode = [string]$data.mode
+            $portalUrl = [string]$data.portalUrl
+            $service = [string]$data.service
             if ($null -eq $account) { $account = '' }
             if ($null -eq $password) { $password = '' }
             if ($null -eq $suffix) { $suffix = '' }
+            if ($null -eq $mode) { $mode = 'auto' }
+            if ($null -eq $portalUrl) { $portalUrl = '' }
+            if ($null -eq $service) { $service = '' }
             $account = $account.Trim()
             $suffix = $suffix.Trim()
+            $mode = $mode.Trim().ToLower()
+            $portalUrl = $portalUrl.Trim()
+            $service = $service.Trim()
 
             if (-not $account) { throw '请输入学号或账号' }
             if ($account.Length -gt 64) { throw '账号过长' }
             if ($account -notmatch '^[A-Za-z0-9@._-]+$') { throw '账号只能包含字母、数字和 @ . _ -' }
             if ($suffix -notin @('', '@cmcc', '@njxy')) { throw '不支持的运营商' }
+            if ($mode -notin @('auto', 'njupt', 'drcom')) { throw '不支持的认证方式' }
+            if ($portalUrl) {
+                if ($portalUrl.Length -gt 300) { throw '认证页地址过长' }
+                if ($portalUrl -notmatch '^https?://') { throw '认证页地址需要以 http:// 或 https:// 开头' }
+            }
+            if ($service.Length -gt 64) { throw '服务名过长' }
 
             if ($password) {
                 if ($password.Length -gt 128) { throw '密码过长' }
@@ -220,8 +248,8 @@ while ($running) {
                 Save-Credential -Account $account -Password $old
             }
 
-            Save-Settings -Account $account -Suffix $suffix
-            Write-UiLog "settings saved: account=$account suffix=$suffix"
+            Save-Settings -Account $account -Suffix $suffix -Mode $mode -PortalUrl $portalUrl -Service $service
+            Write-UiLog "settings saved: account=$account mode=$mode suffix=$suffix portal=$portalUrl service=$service"
             Send-Json -Context $context -Object @{ ok = $true }
             continue
         }

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    安装“南邮校园网开机自动登录”任务。
+    安装“校园网开机自动登录”任务。
 .DESCRIPTION
     1. 把主脚本复制到 %LOCALAPPDATA%\CampusAutoLogin
     2. 用 Windows DPAPI 加密保存账号密码（仅当前 Windows 用户可解密）
@@ -41,7 +41,7 @@ function Write-Step([string]$Text) {
     Write-Host "==> $Text" -ForegroundColor Cyan
 }
 
-Write-Host '南京邮电大学校园网 - 开机自动登录安装程序' -ForegroundColor Green
+Write-Host '校园网自动登录 - 安装程序' -ForegroundColor Green
 Write-Host "账号：$Account$Suffix"
 
 if (-not (Test-Path -LiteralPath $ScriptSrc)) {
@@ -68,17 +68,32 @@ Write-Host "    $ScriptDst"
 Write-Host "    $UiHtml"
 Write-Host "    $UiServer"
 
-Write-Step '写入运营商配置'
+Write-Step '写入认证配置'
 $settingsFile = Join-Path $InstallDir 'settings.ini'
+$existingMode = 'auto'
+$existingPortalUrl = ''
+$existingService = ''
+if (Test-Path -LiteralPath $settingsFile) {
+    try {
+        foreach ($line in Get-Content -LiteralPath $settingsFile -Encoding UTF8) {
+            if ($line -match '^\s*Mode\s*=\s*(.*)$') { $existingMode = $matches[1].Trim() }
+            elseif ($line -match '^\s*PortalUrl\s*=\s*(.*)$') { $existingPortalUrl = $matches[1].Trim() }
+            elseif ($line -match '^\s*Service\s*=\s*(.*)$') { $existingService = $matches[1].Trim() }
+        }
+    } catch { }
+}
 @(
-    '# 南邮校园网自动登录配置',
-    "# 校园网（不填后缀）：Suffix=",
-    "# 中国电信：Suffix=@njxy",
-    "# 中国移动：Suffix=@cmcc",
+    '# 校园网自动登录配置',
+    '# Mode: auto / njupt / drcom',
+    '# 南邮：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
+    '# 通用 Dr.COM：PortalUrl=http://1.1.1.1/，Service 可留空',
+    "Mode=$existingMode",
+    "PortalUrl=$existingPortalUrl",
+    "Service=$existingService",
     "Account=$Account",
     "Suffix=$Suffix"
 ) | Set-Content -LiteralPath $settingsFile -Encoding UTF8
-Write-Host "    $settingsFile（$Account$Suffix）"
+Write-Host "    $settingsFile（$Account$Suffix，模式 $existingMode）"
 
 Write-Step '加密保存账号密码（DPAPI，仅当前用户可解密）'
 function Test-CredentialFile([string]$Path) {
@@ -137,7 +152,7 @@ Register-ScheduledTask -TaskName $TaskName `
     -Trigger $triggerLogon `
     -Principal $principal `
     -Settings $settings `
-    -Description '登录 Windows 后自动连接南邮校园网；只运行一次，不进行定时检查。' `
+    -Description '登录 Windows 后自动连接校园网（支持南邮新版与通用 Dr.COM）；只运行一次，不进行定时检查。' `
     -Force | Out-Null
 
 Write-Host "    任务名称：$TaskName"
@@ -154,7 +169,7 @@ $lnk.TargetPath = "$env:SystemRoot\System32\wscript.exe"
 $lnk.Arguments = "`"$HiddenLauncher`""
 $lnk.WorkingDirectory = $InstallDir
 $lnk.WindowStyle = 1
-$lnk.Description = '立即登录南邮校园网（后台静默运行）'
+$lnk.Description = '立即登录校园网（后台静默运行）'
 $lnk.Save()
 Write-Host "    $shortcutPath"
 
@@ -164,7 +179,7 @@ $lnk2.TargetPath = "$env:SystemRoot\System32\wscript.exe"
 $lnk2.Arguments = "`"$UiLauncher`""
 $lnk2.WorkingDirectory = $InstallDir
 $lnk2.WindowStyle = 1
-$lnk2.Description = '打开南邮校园网设置页'
+$lnk2.Description = '打开校园网设置页'
 $lnk2.Save()
 Write-Host "    $settingsShortcut"
 
@@ -189,3 +204,4 @@ Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -Fo
 Write-Host "日志文件：$logFile"
 Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'
+
