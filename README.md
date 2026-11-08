@@ -1,23 +1,30 @@
-# 校园网自动登录（通用 Dr.COM）
+# 校园网自动登录（Dr.COM 新版 / 旧版）
 
 Windows 校园网自动登录脚本，支持两类常见的 Dr.COM 认证门户：
 
-| 门户类型 | 认证接口 | 典型场景 |
+| 门户类型 | 认证接口 | 特点 |
 | --- | --- | --- |
-| 南邮新版 | `GET /eportal/portal/login`（JSONP） | 南京邮电大学 `p.njupt.edu.cn` |
-| 通用 Dr.COM | `POST /InterFace.do?method=login` | 湖北工业大学 `http://1.1.1.1/` 等旧版门户 |
+| 新版门户 | `GET /eportal/portal/login`（JSONP） | `rcn`、`account_prefix`、运营商后缀 |
+| 旧版门户 | `POST /InterFace.do?method=login` | 服务名下拉框、可选 RSA 密码加密 |
 
-两类门户虽然都是 Dr.COM，但接口、参数、密码加密方式不同。本项目内置两套适配器，可自动识别，也可以在设置页手动指定。
+两类门户虽然都叫 Dr.COM，但接口、参数和密码加密方式不同。本项目内置两套适配器，可自动识别，也可以在设置页手动指定“新版门户 / 旧版门户”。
+
+<p align="center">
+  <img src="campus-login.png" width="96" alt="登录图标">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="campus-settings.png" width="96" alt="设置图标">
+</p>
 
 ## 功能
 
 - **开机自动登录**：登录 Windows 后 15 秒检查一次，未在线就自动认证
 - **只运行一次**：不做定时轮询，不会在游戏过程中反复弹窗
 - **完全静默**：计划任务通过 `wscript` 隐藏启动，不闪命令行窗口
+- **新版 / 旧版双适配**：
+  - 新版：处理 `rcn`、`account_prefix`、运营商后缀
+  - 旧版：解析门户页面、服务名、`passwordEncrypt` 和 RSA 公钥
 - **可视化设置页**：本地网页填写账号、密码、认证方式、认证页地址
-- **双门户适配**：
-  - 南邮新版：处理 `rcn`、`account_prefix`、运营商后缀
-  - 通用 Dr.COM：解析门户页面、服务名、`passwordEncrypt` 和 RSA 公钥
+- **自定义桌面图标**：深蓝渐变 ICO，设置和登录各一枚
 - **密码加密保存**：Windows DPAPI，只有当前 Windows 用户能解密
 - **失败兜底**：登录失败自动打开认证页
 - **可卸载**：一条命令删除计划任务、快捷方式和安装目录
@@ -45,13 +52,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Account "你的学号" -
 
 安装脚本会：
 
-1. 把脚本和设置页复制到 `%LOCALAPPDATA%\CampusAutoLogin`
+1. 把脚本、设置页和图标复制到 `%LOCALAPPDATA%\CampusAutoLogin`
 2. 用 DPAPI 加密保存密码到 `cred.xml`
 3. 注册计划任务 `NJUPT-CampusAutoLogin`（只在登录 Windows 时运行一次）
-4. 创建桌面快捷方式
+4. 创建带自定义图标的桌面快捷方式
 5. 立即运行一次并显示结果
-
-> 任务名沿用 `NJUPT-CampusAutoLogin`，是为了兼容旧版本；其他学校也可以直接使用。
 
 ### 3. 打开设置页
 
@@ -63,34 +68,34 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 
 设置页支持：
 
-- 认证方式：自动识别 / 南邮 Dr.COM / 通用 Dr.COM
+- 认证方式：自动识别 / 新版门户 / 旧版门户
 - 学号 / 账号
 - 密码（留空表示不修改）
-- 南邮运营商：校园网 / 中国移动 `@cmcc` / 中国电信 `@njxy`
-- 通用 Dr.COM 认证页地址（默认 `http://1.1.1.1/`）
-- 通用 Dr.COM 服务名（可留空）
+- 新版门户运营商：校园网 / 中国移动 `@cmcc` / 中国电信 `@njxy`
+- 旧版门户认证页地址（默认 `http://1.1.1.1/`）
+- 旧版门户服务名（可留空）
 - “保存并测试”：保存后立即执行一次登录并显示结果
 
 设置页只监听 `127.0.0.1`，账号密码不会上传。
 
-## 南邮怎么填
+## 新版门户怎么填
 
 | 字段 | 值 |
 | --- | --- |
-| 认证方式 | 自动识别（或南邮 Dr.COM） |
+| 认证方式 | 自动识别（或新版门户） |
 | 账号 | 学号（不含后缀） |
 | 密码 | 校园网密码 |
 | 运营商 | 中国移动 `@cmcc`（按需选择） |
 
-脚本会请求 `p.njupt.edu.cn`，自动处理 `rcn`、`account_prefix` 和运营商后缀。
+脚本会自动请求新版门户的配置接口，并处理 `rcn`、`account_prefix` 和运营商后缀。
 
-## 湖北工业大学 / 通用 Dr.COM 怎么填
+## 旧版门户怎么填
 
-湖北工大认证页是 `http://1.1.1.1/`，登录页使用 `login_bch.js` / `AuthInterFace.js`，提交到 `/InterFace.do?method=login`。
+旧版门户常见地址是 `http://1.1.1.1/`，登录页通常使用 `login_bch.js` / `AuthInterFace.js`，提交到 `/InterFace.do?method=login`。
 
 | 字段 | 值 |
 | --- | --- |
-| 认证方式 | 通用 Dr.COM |
+| 认证方式 | 旧版门户 |
 | 认证页地址 | `http://1.1.1.1/` |
 | 账号 | 学号 |
 | 密码 | 校园网密码 |
@@ -102,7 +107,7 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 - 如果学校门户不是 `1.1.1.1`，把浏览器打开认证页时地址栏里的地址填进去
 - 如果门户有验证码、短信验证、二维码登录，本脚本无法自动完成
 
-其他 Dr.COM 学校，优先试“自动识别”；失败后改成“通用 Dr.COM”并填认证页地址。
+其他 Dr.COM 学校，优先试“自动识别”；失败后改成“旧版门户”并填认证页地址。
 
 ## 计划任务
 
@@ -130,6 +135,8 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 | `run_hidden.vbs` | 计划任务用的隐藏启动器 |
 | `安装.cmd` | 一键安装入口 |
 | `立即登录.cmd` | 手动登录入口 |
+| `campus-login.ico` | 登录快捷方式图标 |
+| `campus-settings.ico` | 设置快捷方式图标 |
 
 安装后生成（不会提交到仓库）：
 
@@ -147,10 +154,10 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 
 ```ini
 Mode=auto                 # auto / njupt / drcom
-PortalUrl=                # 通用 Dr.COM 认证页，留空默认 http://1.1.1.1/
-Service=                  # 通用 Dr.COM 服务名，可留空
+PortalUrl=                # 旧版门户认证页，留空默认 http://1.1.1.1/
+Service=                  # 旧版门户服务名，可留空
 Account=你的学号
-Suffix=@cmcc              # 南邮：移动 @cmcc / 电信 @njxy / 校园网留空
+Suffix=@cmcc              # 新版门户：移动 @cmcc / 电信 @njxy / 校园网留空
 ```
 
 ## 日志
@@ -161,22 +168,22 @@ Suffix=@cmcc              # 南邮：移动 @cmcc / 电信 @njxy / 校园网留�
 
 常见日志：
 
-- `识别为南邮新版门户` / `识别为通用 Dr.COM 门户`：适配器选择
+- `识别为新版门户` / `识别为旧版门户`：适配器选择
 - `已在线，无需登录`：正常
 - `登录返回：认证出现异常`：多数是账号已在别的设备在线
-- `无法打开通用 Dr.COM 认证页`：不在该校园网，或地址填错
+- `无法打开旧版门户认证页`：不在该校园网，或地址填错
 - `门户启用了密码加密，但页面里没有找到 RSA 公钥`：认证页结构变了
 - `用户名或密码错误`：账号/密码不对，或服务名选错
 
 ## 原理
 
-### 南邮新版
+### 新版门户
 
 1. `GET /eportal/portal/page/loadConfig` 获取页面配置和一次性 `rcn`
 2. `GET /eportal/portal/online_list` 查询当前 IP/MAC 是否在线
 3. 未在线时 `GET /eportal/portal/login` 提交账号密码
 
-### 通用 Dr.COM
+### 旧版门户
 
 1. 打开认证页，解析 `passwordEncrypt`、`publicKeyExponent`、`publicKeyModulus`、`prefixValue`、`net_access_type` 和 URL 里的 `queryString`
 2. `POST /InterFace.do?method=pageInfo` 查询是否已在线
@@ -188,7 +195,7 @@ Suffix=@cmcc              # 南邮：移动 @cmcc / 电信 @njxy / 校园网留�
 ## 限制
 
 - 只支持“账号 + 密码”登录；验证码、短信、二维码、CAS 单点登录不支持
-- 通用适配器依赖认证页的字段结构；学校改版后可能需要更新
+- 旧版适配器依赖认证页的字段结构；学校改版后可能需要更新
 - 门户如果是 HTTP，密码是否加密取决于学校是否开启 `passwordEncrypt`
 - 需要 Windows 10/11 + PowerShell 5.1；设置页需要 Chrome 或 Edge
 

@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    卸载“南邮校园网开机自动登录”任务。
+    卸载“校园网开机自动登录”任务。
 #>
 
 #Requires -Version 5.1
@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Continue'
 $TaskName   = 'NJUPT-CampusAutoLogin'
 $InstallDir = Join-Path $env:LOCALAPPDATA 'CampusAutoLogin'
 
-Write-Host '正在卸载南邮校园网自动登录...' -ForegroundColor Cyan
+Write-Host '正在卸载校园网自动登录...' -ForegroundColor Cyan
 
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
@@ -40,3 +40,4 @@ if (Test-Path -LiteralPath $InstallDir) {
 }
 
 Write-Host '卸载完成。' -ForegroundColor Green
+

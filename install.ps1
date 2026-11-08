@@ -34,6 +34,8 @@ $HiddenLauncher = Join-Path $InstallDir 'run_hidden.vbs'
 $UiServer    = Join-Path $InstallDir 'settings_server.ps1'
 $UiHtml      = Join-Path $InstallDir 'settings.html'
 $UiLauncher  = Join-Path $InstallDir '打开设置.vbs'
+$IconLogin   = Join-Path $InstallDir 'campus-login.ico'
+$IconSettings = Join-Path $InstallDir 'campus-settings.ico'
 $UserId      = "$env:USERDOMAIN\$env:USERNAME"
 
 function Write-Step([string]$Text) {
@@ -47,7 +49,7 @@ Write-Host "账号：$Account$Suffix"
 if (-not (Test-Path -LiteralPath $ScriptSrc)) {
     throw "找不到主脚本：$ScriptSrc"
 }
-foreach ($name in @('settings.html', 'settings_server.ps1', '打开设置.vbs', 'run_hidden.vbs')) {
+foreach ($name in @('settings.html', 'settings_server.ps1', '打开设置.vbs', 'run_hidden.vbs', 'campus-login.ico', 'campus-settings.ico')) {
     $p = Join-Path $PSScriptRoot $name
     if (-not (Test-Path -LiteralPath $p)) {
         throw "找不到安装文件：$p"
@@ -64,6 +66,8 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'settings.html') -Destination $U
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'settings_server.ps1') -Destination $UiServer -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '打开设置.vbs') -Destination $UiLauncher -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run_hidden.vbs') -Destination $HiddenLauncher -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'campus-login.ico') -Destination $IconLogin -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'campus-settings.ico') -Destination $IconSettings -Force
 Write-Host "    $ScriptDst"
 Write-Host "    $UiHtml"
 Write-Host "    $UiServer"
@@ -85,7 +89,7 @@ if (Test-Path -LiteralPath $settingsFile) {
 @(
     '# 校园网自动登录配置',
     '# Mode: auto / njupt / drcom',
-    '# 南邮：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
+    '# 新版门户：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
     '# 通用 Dr.COM：PortalUrl=http://1.1.1.1/，Service 可留空',
     "Mode=$existingMode",
     "PortalUrl=$existingPortalUrl",
@@ -152,7 +156,7 @@ Register-ScheduledTask -TaskName $TaskName `
     -Trigger $triggerLogon `
     -Principal $principal `
     -Settings $settings `
-    -Description '登录 Windows 后自动连接校园网（支持南邮新版与通用 Dr.COM）；只运行一次，不进行定时检查。' `
+    -Description '登录 Windows 后自动连接校园网（支持新版与旧版认证门户）；只运行一次，不进行定时检查。' `
     -Force | Out-Null
 
 Write-Host "    任务名称：$TaskName"
@@ -170,6 +174,7 @@ $lnk.Arguments = "`"$HiddenLauncher`""
 $lnk.WorkingDirectory = $InstallDir
 $lnk.WindowStyle = 1
 $lnk.Description = '立即登录校园网（后台静默运行）'
+$lnk.IconLocation = "$IconLogin,0"
 $lnk.Save()
 Write-Host "    $shortcutPath"
 
@@ -180,8 +185,14 @@ $lnk2.Arguments = "`"$UiLauncher`""
 $lnk2.WorkingDirectory = $InstallDir
 $lnk2.WindowStyle = 1
 $lnk2.Description = '打开校园网设置页'
+$lnk2.IconLocation = "$IconSettings,0"
 $lnk2.Save()
 Write-Host "    $settingsShortcut"
+
+# 刷新资源管理器图标缓存，让新图标立即生效
+try {
+    Start-Process -FilePath "$env:SystemRoot\System32\ie4uinit.exe" -ArgumentList '-show' -WindowStyle Hidden -Wait
+} catch { }
 
 Write-Step '立即测试运行'
 & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $ScriptDst
@@ -204,4 +215,7 @@ Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -Fo
 Write-Host "日志文件：$logFile"
 Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'
+
+
+
 

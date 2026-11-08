@@ -1,10 +1,10 @@
 ﻿<#
 .SYNOPSIS
-    校园网自动登录（通用 Dr.COM 版）
+    校园网自动登录
 .DESCRIPTION
     支持两类 Dr.COM 认证门户：
-      1. 南邮新版门户：GET /eportal/portal/login（JSONP）
-      2. 通用 Dr.COM 门户：POST /InterFace.do?method=login（含 RSA 密码）
+      1. 新版门户：GET /eportal/portal/login（JSONP）
+      2. 旧版门户：POST /InterFace.do?method=login（含 RSA 密码）
     登录 Windows 后自动检测一次；未在线则认证。可重复运行。
 
     配置保存在同目录 settings.ini，密码用 Windows DPAPI 加密保存在 cred.xml。
@@ -28,10 +28,10 @@ $UserAgent      = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 $JsVersion      = '4.5'
 
 $Mode           = 'auto'          # auto / njupt / drcom
-$PortalUrl      = ''              # 通用 Dr.COM 认证页；留空用 http://1.1.1.1/
-$Service        = ''              # 通用 Dr.COM 服务名；留空用门户默认
+$PortalUrl      = ''              # 旧版门户认证页；留空用 http://1.1.1.1/
+$Service        = ''              # 旧版门户服务名；留空用门户默认
 $Account        = 'YOUR_ACCOUNT'
-$Suffix         = '@cmcc'         # 南邮：中国移动 @cmcc，电信 @njxy，校园网留空
+$Suffix         = '@cmcc'         # 新版门户：中国移动 @cmcc，电信 @njxy，校园网留空
 
 $CredentialFile = Join-Path $PSScriptRoot 'cred.xml'
 $SettingsFile   = Join-Path $PSScriptRoot 'settings.ini'
@@ -210,7 +210,7 @@ function ConvertTo-DoubleEncoded {
     return ConvertTo-JsUriComponent (ConvertTo-JsUriComponent $Text)
 }
 
-# ======================== 南邮新版门户 ========================
+# ======================== 新版门户 ========================
 function ConvertFrom-Jsonp {
     param([string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
@@ -234,7 +234,7 @@ function Get-NjuptConfig {
     $res = Invoke-Http -Url $url -TimeoutSeconds $TimeoutSeconds -Referer $NjuptPageUrl
     $json = ConvertFrom-Jsonp -Text $res.Content
     if (-not $json -or $json.code -ne 1) {
-        throw "读取南邮门户配置失败：$($res.Content.Substring(0, [Math]::Min(160, $res.Content.Length)))"
+        throw "读取新版门户配置失败：$($res.Content.Substring(0, [Math]::Min(160, $res.Content.Length)))"
     }
     return $json.data
 }
@@ -353,7 +353,7 @@ function Invoke-NjuptFlow {
             continue
         }
         $handled = $true
-        Write-Log "识别为南邮新版门户（$ip）。"
+        Write-Log "识别为新版门户（$ip）。"
         $state = Get-NjuptOnlineState -ClientIp $ip -Config $config
         if ($state.Online) {
             Write-Log "已在线（$ip，账号 $($state.Account)），无需登录。"
@@ -362,7 +362,7 @@ function Invoke-NjuptFlow {
 
         Write-Log "检测到未在线（$ip），正在登录 $Account$Suffix ..."
         $login = Invoke-NjuptLogin -ClientIp $ip -Config $config -Password $script:Password
-        if (-not $login.Success) { Write-Log "南邮登录返回：$($login.Message)" 'WARN' }
+        if (-not $login.Success) { Write-Log "新版门户登录返回：$($login.Message)" 'WARN' }
 
         for ($i = 0; $i -lt 5; $i++) {
             Start-Sleep -Seconds 2
@@ -374,7 +374,7 @@ function Invoke-NjuptFlow {
                 }
             } catch { }
         }
-        Write-Log "南邮门户登录失败：$($login.Message)" 'ERROR'
+        Write-Log "新版门户登录失败：$($login.Message)" 'ERROR'
         if ($OpenPortalOnFailure) { Open-PortalPage $NjuptPageUrl }
         exit 1
     }
@@ -383,7 +383,7 @@ function Invoke-NjuptFlow {
     return $true
 }
 
-# ======================== 通用 Dr.COM 门户 ========================
+# ======================== 旧版门户 ========================
 function Get-BaseUrl {
     param([string]$Url)
     $uri = [Uri]$Url
@@ -588,16 +588,16 @@ function Invoke-DrcomFlow {
     try {
         $page = Get-DrcomPage $url
     } catch {
-        Write-Log "无法打开通用 Dr.COM 认证页（$url）：$($_.Exception.Message)" 'WARN'
+        Write-Log "无法打开旧版门户认证页（$url）：$($_.Exception.Message)" 'WARN'
         return $false
     }
     if ($page.Html -notmatch 'InterFace\.do|passwordEncrypt|login_bch') {
-        Write-Log "认证页不是通用 Dr.COM 门户（$url）。" 'WARN'
+        Write-Log "认证页不是旧版门户（$url）。" 'WARN'
         return $false
     }
 
     $info = Get-DrcomPortalInfo -Page $page -ServiceOverride $Service
-    Write-Log "识别为通用 Dr.COM 门户（$($info.FinalUrl)）。"
+    Write-Log "识别为旧版门户（$($info.FinalUrl)）。"
     if ($info.PasswordEncrypt) { Write-Log '门户启用了 RSA 密码加密，将使用页面公钥加密。' }
 
     if (Test-DrcomOnline -Info $info) {
@@ -609,7 +609,7 @@ function Invoke-DrcomFlow {
     try {
         $login = Invoke-DrcomLogin -Info $info -LoginAccount $Account -LoginPassword $script:Password
     } catch {
-        Write-Log "通用 Dr.COM 登录异常：$($_.Exception.Message)" 'ERROR'
+        Write-Log "旧版门户登录异常：$($_.Exception.Message)" 'ERROR'
         if ($OpenPortalOnFailure) { Open-PortalPage $info.FinalUrl }
         exit 1
     }
@@ -623,7 +623,7 @@ function Invoke-DrcomFlow {
         exit 0
     }
 
-    Write-Log "通用 Dr.COM 登录失败：$($login.Message)（$($login.Raw)）" 'ERROR'
+    Write-Log "旧版门户登录失败：$($login.Message)（$($login.Raw)）" 'ERROR'
     if ($OpenPortalOnFailure) { Open-PortalPage $info.FinalUrl }
     exit 1
 }
@@ -670,7 +670,7 @@ try {
 
     if ($Mode -eq 'njupt') {
         if (-not (Invoke-NjuptFlow)) {
-            Write-Log '没有找到南邮门户，当前可能不在校园网。' 'ERROR'
+            Write-Log '没有找到新版门户，当前可能不在校园网。' 'ERROR'
             if ($OpenPortalOnFailure) { Open-PortalPage $NjuptPageUrl }
             exit 1
         }
@@ -681,14 +681,14 @@ try {
 
     if ($Mode -eq 'drcom') {
         if (-not (Invoke-DrcomFlow)) {
-            Write-Log '没有找到通用 Dr.COM 门户，请检查设置里的认证页地址。' 'ERROR'
+            Write-Log '没有找到旧版门户，请检查设置里的认证页地址。' 'ERROR'
             if ($OpenPortalOnFailure) { Open-PortalPage $drcomFallbackUrl }
             exit 1
         }
         exit 1
     }
 
-    # auto：如果填了非南邮地址，先试通用 Dr.COM；否则先试南邮
+    # auto：如果填了非新版地址，先试旧版门户；否则先试新版门户
     $preferDrcom = $PortalUrl -and ($PortalUrl -notmatch 'p\.njupt\.edu\.cn|a79\.htm')
     if ($preferDrcom) {
         if (Invoke-DrcomFlow) { exit 1 }
@@ -711,6 +711,10 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
+
+
+
 
 
 
