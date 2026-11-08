@@ -4,7 +4,7 @@
 .DESCRIPTION
     1. 把主脚本复制到 %LOCALAPPDATA%\CampusAutoLogin
     2. 用 Windows DPAPI 加密保存账号密码（仅当前 Windows 用户可解密）
-    3. 注册计划任务：登录 Windows 时自动运行 + 每 5 分钟检查一次
+    3. 注册计划任务：登录 Windows 时自动运行一次（无定时检查）
     4. 立即运行一次并显示结果
 .NOTES
     需要以当前用户身份运行，不需要管理员权限。
@@ -30,6 +30,10 @@ $InstallDir  = Join-Path $env:LOCALAPPDATA 'CampusAutoLogin'
 $ScriptSrc   = Join-Path $PSScriptRoot 'campus_autologin.ps1'
 $ScriptDst   = Join-Path $InstallDir 'campus_autologin.ps1'
 $CredFile    = Join-Path $InstallDir 'cred.xml'
+$HiddenLauncher = Join-Path $InstallDir 'run_hidden.vbs'
+$UiServer    = Join-Path $InstallDir 'settings_server.ps1'
+$UiHtml      = Join-Path $InstallDir 'settings.html'
+$UiLauncher  = Join-Path $InstallDir '打开设置.vbs'
 $UserId      = "$env:USERDOMAIN\$env:USERNAME"
 
 function Write-Step([string]$Text) {
@@ -43,14 +47,26 @@ Write-Host "账号：$Account$Suffix"
 if (-not (Test-Path -LiteralPath $ScriptSrc)) {
     throw "找不到主脚本：$ScriptSrc"
 }
+foreach ($name in @('settings.html', 'settings_server.ps1', '打开设置.vbs', 'run_hidden.vbs')) {
+    $p = Join-Path $PSScriptRoot $name
+    if (-not (Test-Path -LiteralPath $p)) {
+        throw "找不到安装文件：$p"
+    }
+}
 
 Write-Step '创建安装目录'
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 Write-Host "    $InstallDir"
 
-Write-Step '复制主脚本'
+Write-Step '复制主脚本和设置页'
 Copy-Item -LiteralPath $ScriptSrc -Destination $ScriptDst -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'settings.html') -Destination $UiHtml -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'settings_server.ps1') -Destination $UiServer -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '打开设置.vbs') -Destination $UiLauncher -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run_hidden.vbs') -Destination $HiddenLauncher -Force
 Write-Host "    $ScriptDst"
+Write-Host "    $UiHtml"
+Write-Host "    $UiServer"
 
 Write-Step '写入运营商配置'
 $settingsFile = Join-Path $InstallDir 'settings.ini'
@@ -99,15 +115,11 @@ if (-not $credReady) {
 
 Write-Step '注册计划任务'
 $action = New-ScheduledTaskAction `
-    -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptDst`""
+    -Execute "$env:SystemRoot\System32\wscript.exe" `
+    -Argument "`"$HiddenLauncher`""
 
 $triggerLogon = New-ScheduledTaskTrigger -AtLogOn -User $UserId
 $triggerLogon.Delay = 'PT15S'
-
-$triggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5) `
-    -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
 
@@ -122,27 +134,39 @@ $settings.StopIfGoingOnBatteries = $false
 
 Register-ScheduledTask -TaskName $TaskName `
     -Action $action `
-    -Trigger @($triggerLogon, $triggerRepeat) `
+    -Trigger $triggerLogon `
     -Principal $principal `
     -Settings $settings `
-    -Description '登录 Windows 后自动连接南邮校园网（中国移动 @cmcc）。' `
+    -Description '登录 Windows 后自动连接南邮校园网；只运行一次，不进行定时检查。' `
     -Force | Out-Null
 
 Write-Host "    任务名称：$TaskName"
-Write-Host '    触发时机：登录 Windows 后 15 秒；之后每 5 分钟检查一次'
+Write-Host '    触发时机：登录 Windows 后 15 秒，仅运行一次（无定时检查）'
+Write-Host '    运行方式：wscript 隐藏启动，不会闪现命令行窗口'
 
 Write-Step '创建桌面快捷方式'
 $desktop = [Environment]::GetFolderPath('Desktop')
-$shortcutPath = Join-Path $desktop '校园网立即登录.lnk'
 $wsh = New-Object -ComObject WScript.Shell
+
+$shortcutPath = Join-Path $desktop '校园网立即登录.lnk'
 $lnk = $wsh.CreateShortcut($shortcutPath)
-$lnk.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$lnk.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptDst`""
+$lnk.TargetPath = "$env:SystemRoot\System32\wscript.exe"
+$lnk.Arguments = "`"$HiddenLauncher`""
 $lnk.WorkingDirectory = $InstallDir
-$lnk.WindowStyle = 7
-$lnk.Description = '立即登录南邮校园网（中国移动）'
+$lnk.WindowStyle = 1
+$lnk.Description = '立即登录南邮校园网（后台静默运行）'
 $lnk.Save()
 Write-Host "    $shortcutPath"
+
+$settingsShortcut = Join-Path $desktop '校园网设置.lnk'
+$lnk2 = $wsh.CreateShortcut($settingsShortcut)
+$lnk2.TargetPath = "$env:SystemRoot\System32\wscript.exe"
+$lnk2.Arguments = "`"$UiLauncher`""
+$lnk2.WorkingDirectory = $InstallDir
+$lnk2.WindowStyle = 1
+$lnk2.Description = '打开南邮校园网设置页'
+$lnk2.Save()
+Write-Host "    $settingsShortcut"
 
 Write-Step '立即测试运行'
 & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $ScriptDst
@@ -163,4 +187,5 @@ if (Test-Path -LiteralPath $logFile) {
 Write-Host ''
 Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -ForegroundColor Green
 Write-Host "日志文件：$logFile"
+Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'

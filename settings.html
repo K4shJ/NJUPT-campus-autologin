@@ -1,0 +1,383 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>南邮校园网设置</title>
+<style>
+  :root{
+    --navy:#0b1b3a;
+    --blue:#2563eb;
+    --blue-2:#1d4ed8;
+    --teal:#0d9488;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --line:#e2e8f0;
+    --soft:#f8fafc;
+    --ok:#047857;
+    --err:#b91c1c;
+    --shadow:0 30px 80px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;min-height:100vh;display:grid;place-items:center;padding:28px;
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(900px 600px at 8% 8%,rgba(37,99,235,.18),transparent 60%),
+      radial-gradient(800px 600px at 92% 92%,rgba(13,148,136,.16),transparent 60%),
+      linear-gradient(135deg,#eef4ff 0%,#f8fbff 45%,#eefaf8 100%);
+    overflow:auto;
+  }
+  body::before,body::after{
+    content:"";position:fixed;border-radius:50%;filter:blur(10px);pointer-events:none;z-index:0;
+  }
+  body::before{width:320px;height:320px;left:-90px;bottom:-90px;background:rgba(37,99,235,.10)}
+  body::after{width:260px;height:260px;right:-60px;top:-60px;background:rgba(13,148,136,.12)}
+  .app{
+    position:relative;z-index:1;width:min(1020px,96vw);
+    height:min(760px,calc(100vh - 48px));min-height:620px;
+    display:grid;grid-template-columns:42% 58%;
+    background:#fff;border-radius:28px;overflow:hidden;box-shadow:var(--shadow);
+    animation:rise .55s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+  .brand{
+    position:relative;overflow:hidden;padding:44px 40px 36px;
+    background:linear-gradient(155deg,#081631 0%,#102b5c 48%,#0b6b63 100%);
+    color:#fff;display:flex;flex-direction:column;
+  }
+  .brand::before{
+    content:"";position:absolute;width:420px;height:420px;border-radius:50%;
+    right:-190px;top:-170px;background:radial-gradient(circle,rgba(96,165,250,.35),transparent 68%);
+  }
+  .brand::after{
+    content:"";position:absolute;inset:0;opacity:.16;
+    background-image:linear-gradient(rgba(255,255,255,.16) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.16) 1px,transparent 1px);
+    background-size:36px 36px;
+    mask-image:linear-gradient(180deg,rgba(0,0,0,.7),transparent 80%);
+  }
+  .brand > *{position:relative;z-index:1}
+  .logo{
+    display:inline-flex;align-items:center;gap:10px;width:max-content;
+    padding:8px 12px;border:1px solid rgba(255,255,255,.28);border-radius:12px;
+    background:rgba(255,255,255,.08);backdrop-filter:blur(8px);
+    font-weight:800;letter-spacing:.16em;font-size:13px;
+  }
+  .logo .dot{width:9px;height:9px;border-radius:50%;background:#34d399;box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+  h1{
+    margin:34px 0 12px;font-size:42px;line-height:1.14;letter-spacing:-.02em;
+    font-weight:800;
+  }
+  h1 span{color:#93c5fd}
+  .brand .sub{margin:0;color:rgba(255,255,255,.72);font-size:14px;letter-spacing:.02em}
+  .features{list-style:none;padding:0;margin:34px 0 0;display:grid;gap:14px}
+  .features li{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:rgba(255,255,255,.86)}
+  .features .ico{
+    flex:0 0 26px;width:26px;height:26px;border-radius:9px;display:grid;place-items:center;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:13px;
+  }
+  .brand .bottom{margin-top:auto;padding-top:34px;color:rgba(255,255,255,.5);font-size:12px;line-height:1.7}
+  .panel{padding:42px 46px 34px;display:flex;flex-direction:column;position:relative;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px}
+  .close{
+    position:absolute;right:18px;top:18px;width:34px;height:34px;border:0;border-radius:10px;
+    background:var(--soft);color:#94a3b8;font-size:18px;cursor:pointer;transition:.2s;
+  }
+  .close:hover{background:#eef2f7;color:#334155}
+  .head h2{margin:0;font-size:27px;letter-spacing:-.02em}
+  .head p{margin:8px 0 0;color:var(--muted);font-size:13.5px}
+  form{margin-top:28px;display:flex;flex-direction:column;gap:17px}
+  .field > label,.field-label{display:block;margin:0 0 8px;font-size:13px;font-weight:700;color:#334155}
+  .input{
+    display:flex;align-items:center;gap:10px;height:52px;padding:0 14px;
+    border:1.5px solid var(--line);border-radius:14px;background:#fff;transition:.18s;
+  }
+  .input:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(37,99,235,.10)}
+  .input svg{flex:0 0 18px;width:18px;height:18px;color:#94a3b8}
+  .input input{
+    flex:1;min-width:0;border:0;outline:0;background:transparent;
+    font:inherit;font-size:15px;color:var(--ink);
+  }
+  .input input::placeholder{color:#b6c2d2}
+  .peek{
+    border:0;background:transparent;color:var(--blue);font:inherit;font-size:12.5px;
+    font-weight:700;cursor:pointer;padding:4px 2px;
+  }
+  .hint{margin:7px 0 0;color:var(--muted);font-size:12px}
+  .carriers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .carrier{position:relative;cursor:pointer}
+  .carrier input{position:absolute;opacity:0;pointer-events:none}
+  .carrier .box{
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    padding:13px 8px 11px;border:1.5px solid var(--line);border-radius:14px;
+    background:#fff;transition:.18s;text-align:center;
+  }
+  .carrier .em{font-size:19px;line-height:1}
+  .carrier .name{font-size:13px;font-weight:700;color:#334155}
+  .carrier .tag{font-size:11px;color:#94a3b8}
+  .carrier input:checked + .box{
+    border-color:var(--blue);background:#eff6ff;
+    box-shadow:0 8px 20px rgba(37,99,235,.12);transform:translateY(-1px);
+  }
+  .carrier input:checked + .box .name{color:var(--blue-2)}
+  .carrier input:focus-visible + .box{outline:2px solid rgba(37,99,235,.45);outline-offset:2px}
+  .actions{display:flex;gap:10px;margin-top:6px}
+  button{font:inherit}
+  .btn{
+    flex:1;height:50px;border:0;border-radius:14px;cursor:pointer;font-weight:800;font-size:14.5px;
+    transition:.18s;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn:disabled{opacity:.58;cursor:not-allowed;transform:none!important}
+  .primary{
+    color:#fff;background:linear-gradient(135deg,#3b82f6,#1d4ed8 70%);
+    box-shadow:0 12px 26px rgba(37,99,235,.28);
+  }
+  .primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 16px 32px rgba(37,99,235,.34)}
+  .secondary{
+    flex:0 0 42%;color:#1e3a8a;background:#eff6ff;border:1.5px solid #bfdbfe;
+  }
+  .secondary:hover:not(:disabled){background:#e0efff;transform:translateY(-1px)}
+  .status{
+    min-height:22px;margin-top:2px;font-size:13px;line-height:1.55;
+    color:var(--muted);
+  }
+  .status .line{display:flex;align-items:flex-start;gap:7px;white-space:pre-wrap}
+  .status .detail{
+    margin:8px 0 0;padding:9px 11px;max-height:92px;overflow:auto;
+    border:1px solid var(--line);border-radius:10px;background:var(--soft);
+    color:#475569;font:11px/1.55 Consolas,"Cascadia Mono",monospace;
+    white-space:pre-wrap;word-break:break-all;
+  }
+  .status.ok{color:var(--ok)}
+  .status.err{color:var(--err)}
+  .status.info{color:#1d4ed8}
+  .status .spinner{
+    width:14px;height:14px;flex:0 0 14px;margin-top:2px;border-radius:50%;
+    border:2px solid rgba(37,99,235,.25);border-top-color:var(--blue);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .foot{
+    margin-top:auto;padding-top:22px;border-top:1px solid var(--line);
+    color:#94a3b8;font-size:11.5px;line-height:1.7;
+  }
+  .foot code{color:#64748b;font-family:Consolas,monospace;font-size:11px}
+  @media (max-width:840px){
+    body{padding:14px}
+    .app{grid-template-columns:1fr;height:auto;min-height:0;border-radius:22px}
+    .brand{padding:28px 26px 24px}
+    h1{font-size:31px;margin-top:22px}
+    .features{margin-top:22px;gap:10px}
+    .brand .bottom{padding-top:22px}
+    .panel{padding:30px 24px 24px;overflow:visible}
+    .actions{flex-direction:column}
+    .secondary{flex:1}
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <aside class="brand">
+    <div class="logo"><span class="dot"></span>NJUPT · CAMPUS NET</div>
+    <h1>校园网<br><span>自动登录</span></h1>
+    <p class="sub">南京邮电大学 · Dr.COM 认证</p>
+    <ul class="features">
+      <li><span class="ico">⚡</span><span>开机自动连接，无需再手选运营商</span></li>
+      <li><span class="ico">🔒</span><span>密码仅保存在本机，Windows DPAPI 加密</span></li>
+      <li><span class="ico">🎮</span><span>后台静默运行，不弹窗、不打扰游戏</span></li>
+    </ul>
+    <div class="bottom">账号密码不会上传到任何服务器<br>只用于本机访问 p.njupt.edu.cn</div>
+  </aside>
+
+  <section class="panel">
+    <button class="close" id="close" title="关闭设置">×</button>
+    <div class="head">
+      <h2>连接设置</h2>
+      <p>填写一次，下次开机自动登录</p>
+    </div>
+
+    <form id="form" autocomplete="off">
+      <div class="field">
+        <label for="account">学号 / 账号</label>
+        <div class="input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.8-3.6 3.7-5.6 7.5-5.6s6.7 2 7.5 5.6"/></svg>
+          <input id="account" name="account" placeholder="例如 B12345678" spellcheck="false" autocomplete="username">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">密码</label>
+        <div class="input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4.5" y="10" width="15" height="10" rx="2.5"/><path d="M8 10V7.8a4 4 0 0 1 8 0V10"/></svg>
+          <input id="password" name="password" type="password" placeholder="请输入校园网密码" autocomplete="current-password">
+          <button type="button" class="peek" id="peek">显示</button>
+        </div>
+        <p class="hint" id="pwdHint">密码会用 Windows DPAPI 加密后保存在本机。</p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">运营商</span>
+        <div class="carriers" role="radiogroup" aria-label="运营商">
+          <label class="carrier">
+            <input type="radio" name="suffix" value="" checked>
+            <span class="box"><span class="em">🏫</span><span class="name">校园网</span><span class="tag">无需后缀</span></span>
+          </label>
+          <label class="carrier">
+            <input type="radio" name="suffix" value="@cmcc">
+            <span class="box"><span class="em">📶</span><span class="name">中国移动</span><span class="tag">@cmcc</span></span>
+          </label>
+          <label class="carrier">
+            <input type="radio" name="suffix" value="@njxy">
+            <span class="box"><span class="em">🌐</span><span class="name">中国电信</span><span class="tag">@njxy</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" type="submit" id="save">保存设置</button>
+        <button class="btn secondary" type="button" id="test">保存并测试</button>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </form>
+
+    <div class="foot">
+      保存位置：<code>%LOCALAPPDATA%\CampusAutoLogin</code><br>
+      任务只在登录 Windows 时运行一次，不会定时弹窗。
+    </div>
+  </section>
+</main>
+
+<script>
+  const TOKEN = '__TOKEN__';
+  const $ = (s) => document.querySelector(s);
+  const statusEl = $('#status');
+  let hasPassword = false;
+
+  function setStatus(text, type = 'muted', spinner = false, detail = '') {
+    statusEl.className = 'status ' + (type === 'muted' ? '' : type);
+    statusEl.innerHTML = '';
+    const line = document.createElement('div');
+    line.className = 'line';
+    if (spinner) {
+      const sp = document.createElement('span');
+      sp.className = 'spinner';
+      line.appendChild(sp);
+    }
+    line.appendChild(document.createTextNode(text));
+    statusEl.appendChild(line);
+    if (detail) {
+      const pre = document.createElement('pre');
+      pre.className = 'detail';
+      pre.textContent = detail;
+      statusEl.appendChild(pre);
+    }
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Token': TOKEN,
+        ...(options.headers || {})
+      }
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || !data || data.ok === false) {
+      throw new Error((data && data.message) || ('请求失败（HTTP ' + res.status + '）'));
+    }
+    return data;
+  }
+
+  function selectCarrier(value) {
+    document.querySelectorAll('input[name="suffix"]').forEach((r) => {
+      r.checked = r.value === value;
+    });
+  }
+
+  function getCarrier() {
+    const el = document.querySelector('input[name="suffix"]:checked');
+    return el ? el.value : '';
+  }
+
+  function setBusy(busy) {
+    document.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
+    document.body.classList.toggle('busy', busy);
+  }
+
+  async function load() {
+    try {
+      const d = await api('/api/status');
+      $('#account').value = d.account || '';
+      hasPassword = !!d.hasPassword;
+      selectCarrier(d.suffix || '');
+      if (hasPassword) {
+        $('#password').placeholder = '已保存，留空则不修改';
+        $('#pwdHint').textContent = '已保存密码；留空表示不修改。';
+      }
+    } catch (e) {
+      setStatus(e.message, 'err');
+    }
+  }
+
+  async function save(thenTest) {
+    const account = $('#account').value.trim();
+    const password = $('#password').value;
+    const suffix = getCarrier();
+
+    if (!account) { setStatus('请输入学号或账号。', 'err'); $('#account').focus(); return; }
+    if (!password && !hasPassword) { setStatus('第一次使用，请输入校园网密码。', 'err'); $('#password').focus(); return; }
+
+    setBusy(true);
+    setStatus('正在保存…', 'info', true);
+    try {
+      await api('/api/save', {
+        method: 'POST',
+        body: JSON.stringify({ account, password, suffix })
+      });
+      if (password) {
+        hasPassword = true;
+        $('#password').value = '';
+        $('#password').placeholder = '已保存，留空则不修改';
+        $('#pwdHint').textContent = '已保存密码；留空表示不修改。';
+      }
+      setStatus('设置已保存 ✓', 'ok');
+
+      if (thenTest) {
+        setStatus('正在测试登录，请稍候…', 'info', true);
+        const r = await api('/api/test', { method: 'POST', body: '{}' });
+        const log = (r.log || '').trim();
+        setStatus(r.ok ? '登录成功 ✓' : '登录失败', r.ok ? 'ok' : 'err', false, log);
+      }
+    } catch (e) {
+      setStatus(e.message, 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  $('#form').addEventListener('submit', (e) => { e.preventDefault(); save(false); });
+  $('#test').addEventListener('click', () => save(true));
+
+  $('#peek').addEventListener('click', () => {
+    const p = $('#password');
+    const show = p.type === 'password';
+    p.type = show ? 'text' : 'password';
+    $('#peek').textContent = show ? '隐藏' : '显示';
+  });
+
+  $('#close').addEventListener('click', async () => {
+    try { await api('/api/close', { method: 'POST', body: '{}' }); } catch (e) {}
+    window.close();
+    setStatus('已关闭，可直接关闭此窗口。', 'info');
+  });
+
+  load();
+</script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 cred.xml
 settings.ini
 autologin.log
+ui.log
 *.log
 *.old
 last-portal-open.txt

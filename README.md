@@ -1,17 +1,18 @@
 # 南邮校园网开机自动登录
 
-南京邮电大学校园网（Dr.COM 哆点认证）Windows 自动登录脚本。开机登录 Windows 后自动联网，不用再手动选择“校园网 / 中国移动 / 中国电信”。
+南京邮电大学校园网（Dr.COM 哆点认证）Windows 自动登录脚本。登录 Windows 后自动联网，不用再手动选择“校园网 / 中国移动 / 中国电信”。
 
 > 适用于南邮 `p.njupt.edu.cn` 认证门户。其他学校如果也是 Dr.COM 门户，可以参考修改。
 
 ## 功能
 
 - **开机自动登录**：登录 Windows 后 15 秒检查一次，未在线就自动认证
-- **断线自动重连**：每 5 分钟检查一次，已在线时约 1 秒退出，几乎不占资源
+- **只运行一次**：不做定时轮询，不会在游戏过程中反复弹窗
+- **完全静默**：计划任务通过 `wscript` 隐藏启动，不闪命令行窗口
+- **可视化设置页**：本地网页填写学号、密码、运营商，保存即可
 - **运营商可选**：中国移动 `@cmcc`、中国电信 `@njxy`、校园网（无后缀）
 - **密码加密保存**：使用 Windows DPAPI，只有当前 Windows 用户能解密
 - **失败兜底**：登录失败会自动打开认证页，方便手动登录
-- **无窗口运行**：计划任务在后台隐藏执行
 - **可卸载**：一条命令删除计划任务、快捷方式和安装目录
 
 ## 快速开始
@@ -38,7 +39,7 @@ cd NJUPT-campus-autologin
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Account "你的学号" -Suffix "@cmcc"
 ```
 
-如果需要中国电信，把 `@cmcc` 换成 `@njxy`；校园网则传空字符串：
+中国电信把 `@cmcc` 换成 `@njxy`；校园网传空字符串：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Account "你的学号" -Suffix "@njxy"
@@ -47,34 +48,65 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Account "你的学号" -
 
 安装脚本会：
 
-1. 把主脚本复制到 `%LOCALAPPDATA%\CampusAutoLogin`
+1. 把脚本和设置页复制到 `%LOCALAPPDATA%\CampusAutoLogin`
 2. 用 DPAPI 加密保存密码到 `cred.xml`
-3. 注册计划任务 `NJUPT-CampusAutoLogin`
-4. 立即运行一次并显示结果
+3. 注册计划任务 `NJUPT-CampusAutoLogin`（只在登录 Windows 时运行一次）
+4. 创建桌面快捷方式
+5. 立即运行一次并显示结果
 
-### 3. 手动登录 / 查看状态
+### 3. 打开设置页
 
-安装后桌面会出现 **“校园网立即登录”** 快捷方式，双击即可手动执行一次。
-
-也可以直接运行：
+双击桌面的 **“校园网设置”**，或运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\CampusAutoLogin\campus_autologin.ps1"
+wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 ```
+
+设置页支持：
+
+- 修改学号 / 账号
+- 修改密码（留空表示不修改）
+- 切换校园网 / 中国移动 / 中国电信
+- “保存并测试”：保存后立即执行一次登录并显示结果
+
+设置页只监听 `127.0.0.1`，账号密码不会上传。
 
 ## 计划任务
 
 | 项目 | 值 |
 | --- | --- |
 | 任务名 | `NJUPT-CampusAutoLogin` |
-| 触发 | 登录 Windows 后 15 秒；之后每 5 分钟 |
+| 触发 | 登录 Windows 后 15 秒，**仅一次** |
+| 运行方式 | `wscript.exe` 隐藏启动 PowerShell，不闪窗口 |
 | 运行身份 | 当前用户，普通权限（不需要管理员） |
 | 已在线时 | 约 1 秒退出 |
 | 电池 | 允许在电池供电时运行 |
 
+没有“每 5 分钟检查”的定时器；网络断开后需要手动双击“校园网立即登录”，或重新登录 Windows。
+
+## 文件说明
+
+| 文件 | 作用 |
+| --- | --- |
+| `campus_autologin.ps1` | 主脚本：检测在线状态、提交认证 |
+| `install.ps1` | 安装：复制文件、加密密码、注册计划任务 |
+| `uninstall.ps1` | 卸载：删除计划任务、快捷方式、安装目录 |
+| `settings.html` | 设置页前端 |
+| `settings_server.ps1` | 设置页本地服务（只监听 127.0.0.1） |
+| `打开设置.vbs` | 启动设置页 |
+| `run_hidden.vbs` | 计划任务用的隐藏启动器 |
+| `安装.cmd` | 一键安装入口 |
+| `立即登录.cmd` | 手动登录入口 |
+
+安装后还会生成（不会提交到仓库）：
+
+- `settings.ini`：账号和运营商
+- `cred.xml`：DPAPI 加密的密码
+- `autologin.log`：运行日志
+
 ## 配置
 
-安装后编辑：
+推荐用设置页修改。也可以手动编辑：
 
 ```
 %LOCALAPPDATA%\CampusAutoLogin\settings.ini
@@ -85,19 +117,7 @@ Account=你的学号
 Suffix=@cmcc      # 中国移动；电信 @njxy；校园网留空
 ```
 
-保存后下一次检查生效。
-
-## 文件说明
-
-| 文件 | 作用 |
-| --- | --- |
-| `campus_autologin.ps1` | 主脚本：检测在线状态、提交认证 |
-| `install.ps1` | 安装：复制文件、加密密码、注册计划任务 |
-| `uninstall.ps1` | 卸载：删除计划任务、快捷方式、安装目录 |
-| `安装.cmd` | 一键安装入口 |
-| `立即登录.cmd` | 手动登录入口 |
-| `settings.ini` | 安装后生成，保存账号和运营商（不会提交到仓库） |
-| `cred.xml` | 安装后生成，DPAPI 加密密码（不会提交到仓库） |
+保存后下次登录生效。
 
 ## 日志
 
@@ -128,7 +148,8 @@ Unregister-ScheduledTask -TaskName "NJUPT-CampusAutoLogin" -Confirm:$false
 
 - 仓库里**不包含** `cred.xml`、`settings.ini` 和日志
 - 密码用 Windows DPAPI 加密，换电脑或换 Windows 用户都无法解密
-- 安装脚本不保存明文密码；没有可用凭据时会提示输入
+- 安装脚本和设置页都不保存明文密码；没有可用凭据时会提示输入
+- 设置页的本地服务只监听 `127.0.0.1`，并使用随机会话令牌
 - 脚本只访问 `p.njupt.edu.cn` 的认证接口
 
 ## 原理

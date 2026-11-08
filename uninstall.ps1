@@ -28,6 +28,12 @@ if (Test-Path -LiteralPath $shortcutPath) {
     Write-Host "  已删除桌面快捷方式：$shortcutPath"
 }
 
+$settingsShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) '校园网设置.lnk'
+if (Test-Path -LiteralPath $settingsShortcut) {
+    Remove-Item -LiteralPath $settingsShortcut -Force
+    Write-Host "  已删除桌面快捷方式：$settingsShortcut"
+}
+
 if (Test-Path -LiteralPath $InstallDir) {
     Remove-Item -LiteralPath $InstallDir -Recurse -Force
     Write-Host "  已删除安装目录：$InstallDir"
