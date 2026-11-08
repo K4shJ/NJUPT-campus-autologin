@@ -85,7 +85,7 @@ function Save-Settings {
         '# 校园网自动登录配置',
         '# Mode: auto / njupt / drcom',
         '# 新版门户：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
-        '# 通用 Dr.COM：PortalUrl=http://1.1.1.1/，Service 可留空',
+        '# 旧版门户：PortalUrl=http://1.1.1.1/，Service 可留空',
         "Mode=$Mode",
         "PortalUrl=$PortalUrl",
         "Service=$Service",
@@ -278,4 +278,5 @@ while ($running) {
 try { $listener.Stop() } catch { }
 try { $listener.Close() } catch { }
 Write-UiLog 'settings server stopped'
+
 

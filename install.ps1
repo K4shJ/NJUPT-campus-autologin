@@ -90,7 +90,7 @@ if (Test-Path -LiteralPath $settingsFile) {
     '# 校园网自动登录配置',
     '# Mode: auto / njupt / drcom',
     '# 新版门户：Suffix=@cmcc（移动） / @njxy（电信） / 留空（校园网）',
-    '# 通用 Dr.COM：PortalUrl=http://1.1.1.1/，Service 可留空',
+    '# 旧版门户：PortalUrl=http://1.1.1.1/，Service 可留空',
     "Mode=$existingMode",
     "PortalUrl=$existingPortalUrl",
     "Service=$existingService",
@@ -215,6 +215,7 @@ Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -Fo
 Write-Host "日志文件：$logFile"
 Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'
+
 
 
 
