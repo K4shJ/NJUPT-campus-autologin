@@ -1,0 +1,12 @@
+# 本地凭据与日志，不要提交
+cred.xml
+settings.ini
+autologin.log
+*.log
+*.old
+last-portal-open.txt
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
