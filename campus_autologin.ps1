@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     校园网自动登录
 .DESCRIPTION
@@ -740,7 +740,7 @@ try {
     if (-not $hasLock) { return }
 
     $script:Password = Get-CredentialFromFile
-    Write-Log "自动登录检查开始（模式：$Mode）。"
+    Write-Log "自动登录检查开始（模式：$Mode，凭据长度 $($script:Password.Length) 位）。"
 
     $candidates = @(Get-CandidateClientIps)
     if ($candidates.Count -gt 0) {
@@ -790,6 +790,7 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
 
 
 
