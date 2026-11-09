@@ -20,7 +20,9 @@ $ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Numerics
 
 # ======================== 默认配置 ========================
-$NjuptHost      = 'https://p.njupt.edu.cn:804'
+$NjuptHost      = 'https://p.njupt.edu.cn:802'
+$NjuptPorts     = @(802, 804)
+$script:NjuptHost = $NjuptHost
 $NjuptApi       = "$NjuptHost/eportal/portal"
 $NjuptPageUrl   = 'https://p.njupt.edu.cn/a79.htm'
 $DefaultDrcomUrl = 'http://1.1.1.1/'
@@ -110,7 +112,8 @@ function Invoke-Http {
         [int]$TimeoutSeconds = 15,
         [switch]$InsecureCert,
         [System.Net.CookieContainer]$CookieContainer = $null,
-        [string]$Referer = ''
+        [string]$Referer = '',
+        [string]$BindLocalIp = ''
     )
 
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -130,6 +133,16 @@ function Invoke-Http {
         $request.Accept = '*/*'
         $request.KeepAlive = $false
         $request.AllowAutoRedirect = $true
+        if ($BindLocalIp) {
+            # 强制请求从指定网卡/IP 发出，避免“拿 A 网卡 IP 登录，实际从 B 网卡发包”
+            $bindIp = $BindLocalIp
+            $bindScript = {
+                param($servicePoint, $remoteEndPoint, $retryCount)
+                $addr = [Net.IPAddress]::Parse($bindIp)
+                return (New-Object Net.IPEndPoint -ArgumentList $addr, 0)
+            }.GetNewClosure()
+            $request.ServicePoint.BindIPEndPointDelegate = [Net.BindIPEndPoint]$bindScript
+        }
         if ($Referer) { $request.Referer = $Referer }
         if ($CookieContainer) { $request.CookieContainer = $CookieContainer }
         else { $request.CookieContainer = New-Object Net.CookieContainer }
@@ -225,29 +238,47 @@ function ConvertFrom-Jsonp {
 }
 
 function Get-NjuptConfig {
-    param([string]$ClientIp, [int]$TimeoutSeconds = 15, [string]$WlanMac = '000000000000')
+    param([string]$ClientIp, [int]$TimeoutSeconds = 15, [string]$WlanMac = '000000000000', [string]$BindLocalIp = '')
     $ipB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ClientIp))
-    $url = "$NjuptApi/page/loadConfig?callback=dr1001&jsVersion=$JsVersion" +
-           "&wlan_user_ip=$([Uri]::EscapeDataString($ipB64))" +
-           "&wlan_user_mac=$WlanMac&wlan_user_ipv6=&wlan_user_ssid=&wlan_user_areaid=" +
-           "&wlan_ac_ip=&wlan_ap_mac=000000000000&gw_id=000000000000&lang=zh"
-    $res = Invoke-Http -Url $url -TimeoutSeconds $TimeoutSeconds -Referer $NjuptPageUrl
-    $json = ConvertFrom-Jsonp -Text $res.Content
-    if (-not $json -or $json.code -ne 1) {
-        throw "读取新版门户配置失败：$($res.Content.Substring(0, [Math]::Min(160, $res.Content.Length)))"
+    $hosts = @()
+    if ($script:NjuptHost) { $hosts += $script:NjuptHost }
+    foreach ($port in $NjuptPorts) {
+        $h = "https://p.njupt.edu.cn:$port"
+        if ($hosts -notcontains $h) { $hosts += $h }
     }
-    return $json.data
+
+    $lastError = ''
+    foreach ($baseHost in $hosts) {
+        $api = "$baseHost/eportal/portal"
+        $url = "$api/page/loadConfig?callback=dr1001&jsVersion=$JsVersion" +
+               "&wlan_user_ip=$([Uri]::EscapeDataString($ipB64))" +
+               "&wlan_user_mac=$WlanMac&wlan_user_ipv6=&wlan_user_ssid=&wlan_user_areaid=" +
+               "&wlan_ac_ip=&wlan_ap_mac=000000000000&gw_id=000000000000&lang=zh"
+        try {
+            $res = Invoke-Http -Url $url -TimeoutSeconds $TimeoutSeconds -Referer $NjuptPageUrl -BindLocalIp $BindLocalIp
+            $json = ConvertFrom-Jsonp -Text $res.Content
+            if ($json -and $json.code -eq 1) {
+                $script:NjuptHost = $baseHost
+                return $json.data
+            }
+            $lastError = $res.Content.Substring(0, [Math]::Min(160, $res.Content.Length))
+        } catch {
+            $lastError = $_.Exception.Message
+        }
+    }
+    throw "读取新版门户配置失败：$lastError"
 }
 
 function Get-NjuptOnlineState {
-    param([string]$ClientIp, [object]$Config, [string]$WlanMac = '000000000000')
+    param([string]$ClientIp, [object]$Config, [string]$WlanMac = '000000000000', [string]$BindLocalIp = '')
     $ipB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ClientIp))
-    $url = "$NjuptApi/online_list?callback=dr1002" +
+    $api = "$script:NjuptHost/eportal/portal"
+    $url = "$api/online_list?callback=dr1002" +
            "&user_account=&user_password=&wlan_user_mac=$WlanMac" +
            "&wlan_user_ip=$([Uri]::EscapeDataString($ipB64))&wlan_user_ipv6=" +
            "&jsVersion=$JsVersion&program_index=$($Config.program_index)" +
            "&page_index=$($Config.page_index)&lang=zh"
-    $res = Invoke-Http -Url $url -Referer $NjuptPageUrl
+    $res = Invoke-Http -Url $url -Referer $NjuptPageUrl -BindLocalIp $BindLocalIp
     $json = ConvertFrom-Jsonp -Text $res.Content
     $online = $false
     $account = ''
@@ -262,11 +293,12 @@ function Get-NjuptOnlineState {
 }
 
 function Invoke-NjuptLogin {
-    param([string]$ClientIp, [object]$Config, [string]$Password, [string]$WlanMac = '000000000000')
+    param([string]$ClientIp, [object]$Config, [string]$Password, [string]$WlanMac = '000000000000', [string]$BindLocalIp = '')
     $fullAccount = $Account + $Suffix
     $prefix = if ([string]$Config.account_prefix -eq '1') { ',0,' } else { '' }
     $prefixedAccount = $prefix + $fullAccount
-    $loginBase = if ([int]$Config.login_method -eq 0) { "$NjuptHost/drcom" } else { $NjuptApi }
+    $api = "$script:NjuptHost/eportal/portal"
+    $loginBase = if ([int]$Config.login_method -eq 0) { "$script:NjuptHost/drcom" } else { $api }
 
     $params = [ordered]@{
         callback = 'dr1003'; DDDDD = $fullAccount; upass = $Password; '0MKKey' = '123456'
@@ -284,7 +316,7 @@ function Invoke-NjuptLogin {
         '{0}={1}' -f [Uri]::EscapeDataString([string]$key), [Uri]::EscapeDataString([string]$params[$key])
     }
     $url = "$loginBase/login?" + ($pairs -join '&')
-    $res = Invoke-Http -Url $url -TimeoutSeconds 20 -Referer $NjuptPageUrl
+    $res = Invoke-Http -Url $url -TimeoutSeconds 20 -Referer $NjuptPageUrl -BindLocalIp $BindLocalIp
     $json = ConvertFrom-Jsonp -Text $res.Content
     return [pscustomobject]@{
         Success = ($json -and ($json.result -eq 1 -or $json.result -eq 'ok'))
@@ -352,9 +384,9 @@ function Get-MacForIp {
 }
 
 function Test-Internet {
-    param([int]$TimeoutSeconds = 2)
+    param([int]$TimeoutSeconds = 2, [string]$BindLocalIp = '')
     try {
-        $res = Invoke-Http -Url 'http://www.msftconnecttest.com/connecttest.txt' -TimeoutSeconds $TimeoutSeconds
+        $res = Invoke-Http -Url 'http://www.msftconnecttest.com/connecttest.txt' -TimeoutSeconds $TimeoutSeconds -BindLocalIp $BindLocalIp
         return ($res.Content.Trim() -eq 'Microsoft Connect Test')
     } catch {
         return $false
@@ -366,6 +398,7 @@ function Wait-NjuptOnline {
         [string]$ClientIp,
         [object]$Config,
         [string]$WlanMac = '000000000000',
+        [string]$BindLocalIp = '',
         [int]$Rounds = 6,
         [int]$DelayMs = 250,
         [switch]$CheckInternet
@@ -373,11 +406,11 @@ function Wait-NjuptOnline {
     for ($i = 0; $i -lt $Rounds; $i++) {
         if ($i -gt 0) { Start-Sleep -Milliseconds $DelayMs }
         try {
-            $v = Get-NjuptOnlineState -ClientIp $ClientIp -Config $Config -WlanMac $WlanMac
+            $v = Get-NjuptOnlineState -ClientIp $ClientIp -Config $Config -WlanMac $WlanMac -BindLocalIp $BindLocalIp
             if ($v.Online) { return $v }
         } catch { }
         if ($CheckInternet -and $i -ge 1) {
-            if (Test-Internet) {
+            if (Test-Internet -BindLocalIp $BindLocalIp) {
                 return [pscustomobject]@{ Online = $true; Account = '(internet)'; Raw = '' }
             }
         }
@@ -395,15 +428,16 @@ function Invoke-NjuptFlow {
         $ip = $candidate.IP
         $wlanMac = Get-MacForIp $ip
         try {
-            $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds $probeTimeout -WlanMac $wlanMac
+            $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds $probeTimeout -WlanMac $wlanMac -BindLocalIp $ip
         } catch {
+            Write-Log "新版门户探测失败（$ip）：$($_.Exception.Message)" 'WARN'
             continue
         }
         $handled = $true
         Write-Log "识别为新版门户（$ip）。"
 
         try {
-            $state = Get-NjuptOnlineState -ClientIp $ip -Config $config -WlanMac $wlanMac
+            $state = Get-NjuptOnlineState -ClientIp $ip -Config $config -WlanMac $wlanMac -BindLocalIp $ip
             if ($state.Online) {
                 Write-Log "已在线（$ip，账号 $($state.Account)），无需登录。"
                 exit 0
@@ -416,12 +450,12 @@ function Invoke-NjuptFlow {
         for ($attempt = 1; $attempt -le 3; $attempt++) {
             if ($attempt -gt 1) {
                 Start-Sleep -Milliseconds 600
-                try { $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds 10 -WlanMac $wlanMac } catch { }
+                try { $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds 10 -WlanMac $wlanMac -BindLocalIp $ip } catch { }
             }
 
             $sw = [Diagnostics.Stopwatch]::StartNew()
             try {
-                $login = Invoke-NjuptLogin -ClientIp $ip -Config $config -Password $script:Password -WlanMac $wlanMac
+                $login = Invoke-NjuptLogin -ClientIp $ip -Config $config -Password $script:Password -WlanMac $wlanMac -BindLocalIp $ip
             } catch {
                 $sw.Stop()
                 $lastMessage = $_.Exception.Message
@@ -438,7 +472,7 @@ function Invoke-NjuptFlow {
                 Write-Log "第 $attempt 次登录返回（$elapsed s）：$($login.Message)" 'WARN'
             }
 
-            $verify = Wait-NjuptOnline -ClientIp $ip -Config $config -WlanMac $wlanMac -Rounds 6 -DelayMs 250 -CheckInternet
+            $verify = Wait-NjuptOnline -ClientIp $ip -Config $config -WlanMac $wlanMac -BindLocalIp $ip -Rounds 6 -DelayMs 250 -CheckInternet
             if ($verify) {
                 $account = if ($verify.Account) { $verify.Account } else { $Account + $Suffix }
                 Write-Log "登录成功并已确认在线（$ip，账号 $account）。"
@@ -790,6 +824,12 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
+
+
+
+
+
 
 
 
