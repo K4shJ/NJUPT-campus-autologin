@@ -138,7 +138,11 @@ $action = New-ScheduledTaskAction `
     -Argument "`"$HiddenLauncher`""
 
 $triggerLogon = New-ScheduledTaskTrigger -AtLogOn -User $UserId
-$triggerLogon.Delay = 'PT15S'
+$triggerLogon.Delay = 'PT3S'
+
+# 登录后 60 秒再兜底尝试一次；成功时第二次只会快速检测到已在线
+$triggerRetry = New-ScheduledTaskTrigger -AtLogOn -User $UserId
+$triggerRetry.Delay = 'PT60S'
 
 $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
 
@@ -153,14 +157,14 @@ $settings.StopIfGoingOnBatteries = $false
 
 Register-ScheduledTask -TaskName $TaskName `
     -Action $action `
-    -Trigger $triggerLogon `
+    -Trigger @($triggerLogon, $triggerRetry) `
     -Principal $principal `
     -Settings $settings `
     -Description '登录 Windows 后自动连接校园网（支持新版与旧版认证门户）；只运行一次，不进行定时检查。' `
     -Force | Out-Null
 
 Write-Host "    任务名称：$TaskName"
-Write-Host '    触发时机：登录 Windows 后 15 秒，仅运行一次（无定时检查）'
+Write-Host '    触发时机：登录 Windows 后约 3 秒；60 秒后兜底重试一次（无定时检查）'
 Write-Host '    运行方式：wscript 隐藏启动，不会闪现命令行窗口'
 
 Write-Step '创建桌面快捷方式'
@@ -215,6 +219,8 @@ Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -Fo
 Write-Host "日志文件：$logFile"
 Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'
+
+
 
 
 

@@ -225,11 +225,11 @@ function ConvertFrom-Jsonp {
 }
 
 function Get-NjuptConfig {
-    param([string]$ClientIp, [int]$TimeoutSeconds = 15)
+    param([string]$ClientIp, [int]$TimeoutSeconds = 15, [string]$WlanMac = '000000000000')
     $ipB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ClientIp))
     $url = "$NjuptApi/page/loadConfig?callback=dr1001&jsVersion=$JsVersion" +
            "&wlan_user_ip=$([Uri]::EscapeDataString($ipB64))" +
-           "&wlan_user_mac=000000000000&wlan_user_ipv6=&wlan_user_ssid=&wlan_user_areaid=" +
+           "&wlan_user_mac=$WlanMac&wlan_user_ipv6=&wlan_user_ssid=&wlan_user_areaid=" +
            "&wlan_ac_ip=&wlan_ap_mac=000000000000&gw_id=000000000000&lang=zh"
     $res = Invoke-Http -Url $url -TimeoutSeconds $TimeoutSeconds -Referer $NjuptPageUrl
     $json = ConvertFrom-Jsonp -Text $res.Content
@@ -240,10 +240,10 @@ function Get-NjuptConfig {
 }
 
 function Get-NjuptOnlineState {
-    param([string]$ClientIp, [object]$Config)
+    param([string]$ClientIp, [object]$Config, [string]$WlanMac = '000000000000')
     $ipB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ClientIp))
     $url = "$NjuptApi/online_list?callback=dr1002" +
-           "&user_account=&user_password=&wlan_user_mac=000000000000" +
+           "&user_account=&user_password=&wlan_user_mac=$WlanMac" +
            "&wlan_user_ip=$([Uri]::EscapeDataString($ipB64))&wlan_user_ipv6=" +
            "&jsVersion=$JsVersion&program_index=$($Config.program_index)" +
            "&page_index=$($Config.page_index)&lang=zh"
@@ -262,7 +262,7 @@ function Get-NjuptOnlineState {
 }
 
 function Invoke-NjuptLogin {
-    param([string]$ClientIp, [object]$Config, [string]$Password)
+    param([string]$ClientIp, [object]$Config, [string]$Password, [string]$WlanMac = '000000000000')
     $fullAccount = $Account + $Suffix
     $prefix = if ([string]$Config.account_prefix -eq '1') { ',0,' } else { '' }
     $prefixedAccount = $prefix + $fullAccount
@@ -273,7 +273,7 @@ function Invoke-NjuptLogin {
         R1 = '0'; R2 = '0'; R3 = '0'; R6 = '0'; para = '00'; v6ip = ''
         R7 = '0'; user_account = $prefixedAccount; user_password = $Password
         wlan_user_ip = $ClientIp; wlan_user_ipv6 = ''; authex_enable = ''
-        wlan_user_mac = '000000000000'; wlan_ac_name = ''; jsVersion = $JsVersion
+        wlan_user_mac = $WlanMac; wlan_ac_name = ''; jsVersion = $JsVersion
         terminal_type = '1'; lang = 'zh-cn'; user_agent = $UserAgent
         enable_r3 = '0'; mac_type = '0'; rcn = [string]$Config.rcn
         operate = 'portal_login'; business_type = '0'
@@ -339,6 +339,52 @@ function Get-CandidateClientIps {
     return @($list | Sort-Object Metric)
 }
 
+function Get-MacForIp {
+    param([string]$ClientIp)
+    try {
+        $addr = Get-NetIPAddress -IPAddress $ClientIp -AddressFamily IPv4 -ErrorAction Stop |
+                Select-Object -First 1
+        $adapter = Get-NetAdapter -InterfaceIndex $addr.InterfaceIndex -ErrorAction Stop
+        $mac = ($adapter.MacAddress -replace '[-:]', '').ToUpper()
+        if ($mac) { return $mac }
+    } catch { }
+    return '000000000000'
+}
+
+function Test-Internet {
+    param([int]$TimeoutSeconds = 2)
+    try {
+        $res = Invoke-Http -Url 'http://www.msftconnecttest.com/connecttest.txt' -TimeoutSeconds $TimeoutSeconds
+        return ($res.Content.Trim() -eq 'Microsoft Connect Test')
+    } catch {
+        return $false
+    }
+}
+
+function Wait-NjuptOnline {
+    param(
+        [string]$ClientIp,
+        [object]$Config,
+        [string]$WlanMac = '000000000000',
+        [int]$Rounds = 6,
+        [int]$DelayMs = 250,
+        [switch]$CheckInternet
+    )
+    for ($i = 0; $i -lt $Rounds; $i++) {
+        if ($i -gt 0) { Start-Sleep -Milliseconds $DelayMs }
+        try {
+            $v = Get-NjuptOnlineState -ClientIp $ClientIp -Config $Config -WlanMac $WlanMac
+            if ($v.Online) { return $v }
+        } catch { }
+        if ($CheckInternet -and $i -ge 1) {
+            if (Test-Internet) {
+                return [pscustomobject]@{ Online = $true; Account = '(internet)'; Raw = '' }
+            }
+        }
+    }
+    return $null
+}
+
 function Invoke-NjuptFlow {
     param([switch]$Probe)
     $handled = $false
@@ -347,40 +393,73 @@ function Invoke-NjuptFlow {
 
     foreach ($candidate in $candidates) {
         $ip = $candidate.IP
+        $wlanMac = Get-MacForIp $ip
         try {
-            $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds $probeTimeout
+            $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds $probeTimeout -WlanMac $wlanMac
         } catch {
             continue
         }
         $handled = $true
         Write-Log "识别为新版门户（$ip）。"
-        $state = Get-NjuptOnlineState -ClientIp $ip -Config $config
-        if ($state.Online) {
-            Write-Log "已在线（$ip，账号 $($state.Account)），无需登录。"
-            exit 0
-        }
+
+        try {
+            $state = Get-NjuptOnlineState -ClientIp $ip -Config $config -WlanMac $wlanMac
+            if ($state.Online) {
+                Write-Log "已在线（$ip，账号 $($state.Account)），无需登录。"
+                exit 0
+            }
+        } catch { }
 
         Write-Log "检测到未在线（$ip），正在登录 $Account$Suffix ..."
-        $login = Invoke-NjuptLogin -ClientIp $ip -Config $config -Password $script:Password
-        if (-not $login.Success) { Write-Log "新版门户登录返回：$($login.Message)" 'WARN' }
+        $lastMessage = ''
 
-        for ($i = 0; $i -lt 5; $i++) {
-            Start-Sleep -Seconds 2
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            if ($attempt -gt 1) {
+                Start-Sleep -Milliseconds 600
+                try { $config = Get-NjuptConfig -ClientIp $ip -TimeoutSeconds 10 -WlanMac $wlanMac } catch { }
+            }
+
+            $sw = [Diagnostics.Stopwatch]::StartNew()
             try {
-                $verify = Get-NjuptOnlineState -ClientIp $ip -Config $config
-                if ($verify.Online) {
-                    Write-Log "登录成功并已确认在线（$ip，账号 $($verify.Account)）。"
-                    exit 0
-                }
-            } catch { }
+                $login = Invoke-NjuptLogin -ClientIp $ip -Config $config -Password $script:Password -WlanMac $wlanMac
+            } catch {
+                $sw.Stop()
+                $lastMessage = $_.Exception.Message
+                Write-Log "第 $attempt 次登录请求异常（$([Math]::Round($sw.Elapsed.TotalSeconds, 1))s）：$lastMessage" 'WARN'
+                continue
+            }
+            $sw.Stop()
+            $lastMessage = $login.Message
+            $elapsed = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
+
+            if ($login.Success) {
+                Write-Log "登录请求成功（$elapsed s）：$($login.Message)"
+            } else {
+                Write-Log "第 $attempt 次登录返回（$elapsed s）：$($login.Message)" 'WARN'
+            }
+
+            $verify = Wait-NjuptOnline -ClientIp $ip -Config $config -WlanMac $wlanMac -Rounds 6 -DelayMs 250 -CheckInternet
+            if ($verify) {
+                $account = if ($verify.Account) { $verify.Account } else { $Account + $Suffix }
+                Write-Log "登录成功并已确认在线（$ip，账号 $account）。"
+                exit 0
+            }
+
+            if ($login.Success) {
+                Write-Log "登录请求已成功，门户状态暂未刷新，按成功处理（$ip）。"
+                exit 0
+            }
         }
-        Write-Log "新版门户登录失败：$($login.Message)" 'ERROR'
+
+        Write-Log "新版门户在 $ip 登录失败：$lastMessage" 'ERROR'
+        # 继续尝试下一个网卡/IP
+    }
+
+    if ($handled) {
         if ($OpenPortalOnFailure) { Open-PortalPage $NjuptPageUrl }
         exit 1
     }
-
-    if (-not $handled) { return $false }
-    return $true
+    return $false
 }
 
 # ======================== 旧版门户 ========================
@@ -711,6 +790,11 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
+
+
+
+
 
 
 

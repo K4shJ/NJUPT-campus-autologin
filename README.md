@@ -17,16 +17,17 @@ Windows 校园网自动登录脚本，支持两类常见的 Dr.COM 认证门户�
 
 ## 功能
 
-- **开机自动登录**：登录 Windows 后 15 秒检查一次，未在线就自动认证
-- **只运行一次**：不做定时轮询，不会在游戏过程中反复弹窗
+- **快速登录**：登录 Windows 后约 3 秒开始，在线时约 1.5 秒退出
+- **失败重试**：登录失败会换新 `rcn` 重试 3 次；60 秒后任务再兜底尝试一次
+- **不做定时轮询**：不会在游戏过程中反复弹窗
 - **完全静默**：计划任务通过 `wscript` 隐藏启动，不闪命令行窗口
 - **新版 / 旧版双适配**：
-  - 新版：处理 `rcn`、`account_prefix`、运营商后缀
+  - 新版：处理 `rcn`、`account_prefix`、运营商后缀，使用真实网卡 MAC
   - 旧版：解析门户页面、服务名、`passwordEncrypt` 和 RSA 公钥
 - **可视化设置页**：本地网页填写账号、密码、认证方式、认证页地址
 - **自定义桌面图标**：深蓝渐变 ICO，设置和登录各一枚
 - **密码加密保存**：Windows DPAPI，只有当前 Windows 用户能解密
-- **失败兜底**：登录失败自动打开认证页
+- **失败兜底**：多次重试仍失败时自动打开认证页
 - **可卸载**：一条命令删除计划任务、快捷方式和安装目录
 
 ## 快速开始
@@ -54,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Account "你的学号" -
 
 1. 把脚本、设置页和图标复制到 `%LOCALAPPDATA%\CampusAutoLogin`
 2. 用 DPAPI 加密保存密码到 `cred.xml`
-3. 注册计划任务 `NJUPT-CampusAutoLogin`（只在登录 Windows 时运行一次）
+3. 注册计划任务 `NJUPT-CampusAutoLogin`（登录后 3 秒 + 60 秒兜底，各一次）
 4. 创建带自定义图标的桌面快捷方式
 5. 立即运行一次并显示结果
 
@@ -87,7 +88,7 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 | 密码 | 校园网密码 |
 | 运营商 | 中国移动 `@cmcc`（按需选择） |
 
-脚本会自动请求新版门户的配置接口，并处理 `rcn`、`account_prefix` 和运营商后缀。
+脚本会请求新版门户的配置接口，自动处理 `rcn`、`account_prefix` 和运营商后缀。
 
 ## 旧版门户怎么填
 
@@ -109,15 +110,24 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 
 其他 Dr.COM 学校，优先试“自动识别”；失败后改成“旧版门户”并填认证页地址。
 
+## 速度与重试
+
+- 登录 Windows 后 **3 秒**启动任务，不再固定等 15 秒
+- 启动后一旦拿到校园网 IP 就立即检查，不再固定等 DHCP
+- 在线检测正常时约 **1.5 秒**退出
+- 登录接口返回异常时，会 **重新获取 `rcn` 并重试 3 次**（每次间隔 0.6 秒）
+- 每次登录后用 250ms 间隔快速验证在线状态，并检查外网连通性
+- 60 秒后计划任务再兜底运行一次；如果第一次已成功，第二次只会快速检测到在线并退出
+
 ## 计划任务
 
 | 项目 | 值 |
 | --- | --- |
 | 任务名 | `NJUPT-CampusAutoLogin` |
-| 触发 | 登录 Windows 后 15 秒，**仅一次** |
+| 触发 | 登录 Windows 后 3 秒；60 秒后兜底，各一次 |
 | 运行方式 | `wscript.exe` 隐藏启动 PowerShell，不闪窗口 |
 | 运行身份 | 当前用户，普通权限（不需要管理员） |
-| 已在线时 | 约 1 秒退出 |
+| 已在线时 | 约 1.5 秒退出 |
 | 定时检查 | 无 |
 
 网络中途断开后，双击“校园网立即登录”手动重连，或重新登录 Windows。
@@ -170,9 +180,9 @@ Suffix=@cmcc              # 新版门户：移动 @cmcc / 电信 @njxy / 校园�
 
 - `识别为新版门户` / `识别为旧版门户`：适配器选择
 - `已在线，无需登录`：正常
-- `登录返回：认证出现异常`：多数是账号已在别的设备在线
+- `第 N 次登录返回`：第一次失败后正在重试
+- `登录请求已成功，门户状态暂未刷新`：登录接口已成功，不再误判失败
 - `无法打开旧版门户认证页`：不在该校园网，或地址填错
-- `门户启用了密码加密，但页面里没有找到 RSA 公钥`：认证页结构变了
 - `用户名或密码错误`：账号/密码不对，或服务名选错
 
 ## 原理
@@ -182,6 +192,7 @@ Suffix=@cmcc              # 新版门户：移动 @cmcc / 电信 @njxy / 校园�
 1. `GET /eportal/portal/page/loadConfig` 获取页面配置和一次性 `rcn`
 2. `GET /eportal/portal/online_list` 查询当前 IP/MAC 是否在线
 3. 未在线时 `GET /eportal/portal/login` 提交账号密码
+4. 失败时重新获取 `rcn` 再试，避免一次性令牌失效导致连续失败
 
 ### 旧版门户
 
@@ -189,8 +200,7 @@ Suffix=@cmcc              # 新版门户：移动 @cmcc / 电信 @njxy / 校园�
 2. `POST /InterFace.do?method=pageInfo` 查询是否已在线
 3. 未在线时 `POST /InterFace.do?method=login` 提交：
    `userId`、`password`、`service`、`queryString`、`passwordEncrypt`
-4. 如果门户启用密码加密，按门户 JS 的算法做原始 RSA：
-   反转 `密码>MAC`，按 `chunkSize = 2 * floor((bitLen-1)/16)` 分块，零填充，`ModPow`，输出十六进制
+4. 如果门户启用密码加密，按门户 JS 的算法做原始 RSA
 
 ## 限制
 
