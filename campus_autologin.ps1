@@ -297,13 +297,15 @@ function Invoke-NjuptLogin {
     $fullAccount = $Account + $Suffix
     $prefix = if ([string]$Config.account_prefix -eq '1') { ',0,' } else { '' }
     $prefixedAccount = $prefix + $fullAccount
+    $r2 = if ([int]$Config.en_md5 -eq 1) { '1' } else { '' }
     $api = "$script:NjuptHost/eportal/portal"
     $loginBase = if ([int]$Config.login_method -eq 0) { "$script:NjuptHost/drcom" } else { $api }
 
     $params = [ordered]@{
         callback = 'dr1003'; DDDDD = $fullAccount; upass = $Password; '0MKKey' = '123456'
-        R1 = '0'; R2 = '0'; R3 = '0'; R6 = '0'; para = '00'; v6ip = ''
+        R1 = '0'; R2 = $r2; R3 = '0'; R6 = '0'; para = '00'; v6ip = ''
         R7 = '0'; user_account = $prefixedAccount; user_password = $Password
+        v4ip = $ClientIp; R10 = '0'
         wlan_user_ip = $ClientIp; wlan_user_ipv6 = ''; authex_enable = ''
         wlan_user_mac = $WlanMac; wlan_ac_name = ''; jsVersion = $JsVersion
         terminal_type = '1'; lang = 'zh-cn'; user_agent = $UserAgent
@@ -824,6 +826,8 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
+
 
 
 
