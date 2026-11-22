@@ -42,6 +42,7 @@ $LogFile        = Join-Path $LogDir 'autologin.log'
 $PortalOpenMarker = Join-Path $LogDir 'last-portal-open.txt'
 $MaxLogBytes    = 512KB
 $OpenPortalOnFailure = $true
+$ClosePortalWindowOnSuccess = $true   # 登录成功后关闭浏览器里的门户选择页
 # ==========================================================
 
 # 读取 settings.ini
@@ -442,7 +443,8 @@ function Invoke-NjuptFlow {
             $state = Get-NjuptOnlineState -ClientIp $ip -Config $config -WlanMac $wlanMac -BindLocalIp $ip
             if ($state.Online) {
                 Write-Log "已在线（$ip，账号 $($state.Account)），无需登录。"
-                exit 0
+                Close-PortalWindows
+exit 0
             }
         } catch { }
 
@@ -478,12 +480,14 @@ function Invoke-NjuptFlow {
             if ($verify) {
                 $account = if ($verify.Account) { $verify.Account } else { $Account + $Suffix }
                 Write-Log "登录成功并已确认在线（$ip，账号 $account）。"
-                exit 0
+                Close-PortalWindows
+exit 0
             }
 
             if ($login.Success) {
                 Write-Log "登录请求已成功，门户状态暂未刷新，按成功处理（$ip）。"
-                exit 0
+                Close-PortalWindows
+exit 0
             }
         }
 
@@ -717,7 +721,8 @@ function Invoke-DrcomFlow {
 
     if (Test-DrcomOnline -Info $info) {
         Write-Log '已在线，无需登录。'
-        exit 0
+        Close-PortalWindows
+exit 0
     }
 
     Write-Log "检测到未在线，正在登录 $Account ..."
@@ -731,11 +736,13 @@ function Invoke-DrcomFlow {
 
     if ($login.Success) {
         Write-Log "登录成功：$($login.Message)"
-        exit 0
+        Close-PortalWindows
+exit 0
     }
     if (Test-DrcomOnline -Info $info) {
         Write-Log '登录后已确认在线。'
-        exit 0
+        Close-PortalWindows
+exit 0
     }
 
     Write-Log "旧版门户登录失败：$($login.Message)（$($login.Raw)）" 'ERROR'
@@ -744,6 +751,18 @@ function Invoke-DrcomFlow {
 }
 
 # ======================== 公共 ========================
+function Close-PortalWindows {
+    if (-not $ClosePortalWindowOnSuccess) { return }
+    $patterns = '上网登录页|校园网认证|Dr\.COM.*认证|校园网登录页'
+    foreach ($name in @('chrome', 'msedge', 'firefox')) {
+        foreach ($proc in Get-Process -Name $name -ErrorAction SilentlyContinue) {
+            if ($proc.MainWindowTitle -match $patterns) {
+                try { $proc.CloseMainWindow() | Out-Null } catch { }
+            }
+        }
+    }
+}
+
 function Open-PortalPage {
     param([string]$Url)
     if (-not $Url) { return }
@@ -826,6 +845,8 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
+
 
 
 
