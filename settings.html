@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -427,7 +427,15 @@
         setStatus('正在测试登录，请稍候…', 'info', true);
         const r = await api('/api/test', { method: 'POST', body: '{}' });
         const log = (r.log || '').trim();
-        setStatus(r.ok ? '登录成功 ✓' : '登录失败', r.ok ? 'ok' : 'err', false, log);
+        if (r.ok) {
+          setStatus('登录成功 ✓，页面即将自动关闭…', 'ok', false, log);
+          setTimeout(async () => {
+            try { await api('/api/close', { method: 'POST', body: '{}' }); } catch (e) {}
+            window.close();
+          }, 1200);
+        } else {
+          setStatus('登录失败', 'err', false, log);
+        }
       }
     } catch (e) {
       setStatus(e.message, 'err');
