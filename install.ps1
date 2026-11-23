@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     安装“校园网开机自动登录”任务。
 .DESCRIPTION
@@ -19,9 +19,6 @@ param(
     [string]$Password = ''
 )
 
-if ($Account -eq 'YOUR_ACCOUNT') {
-    $Account = Read-Host '请输入你的学号（不含 @cmcc 等后缀）'
-}
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -144,6 +141,10 @@ $triggerLogon.Delay = 'PT3S'
 $triggerRetry = New-ScheduledTaskTrigger -AtLogOn -User $UserId
 $triggerRetry.Delay = 'PT60S'
 
+# 3 分钟后再兜底一次，防止刚开机旧会话还没释放
+$triggerRetry2 = New-ScheduledTaskTrigger -AtLogOn -User $UserId
+$triggerRetry2.Delay = 'PT3M'
+
 $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
 
 $settings = New-ScheduledTaskSettingsSet `
@@ -157,14 +158,14 @@ $settings.StopIfGoingOnBatteries = $false
 
 Register-ScheduledTask -TaskName $TaskName `
     -Action $action `
-    -Trigger @($triggerLogon, $triggerRetry) `
+    -Trigger @($triggerLogon, $triggerRetry, $triggerRetry2) `
     -Principal $principal `
     -Settings $settings `
     -Description '登录 Windows 后自动连接校园网（支持新版与旧版认证门户）；只运行一次，不进行定时检查。' `
     -Force | Out-Null
 
 Write-Host "    任务名称：$TaskName"
-Write-Host '    触发时机：登录 Windows 后约 3 秒；60 秒后兜底重试一次（无定时检查）'
+Write-Host '    触发时机：登录 Windows 后约 3 秒；60 秒、3 分钟各兜底一次（无定时检查）'
 Write-Host '    运行方式：wscript 隐藏启动，不会闪现命令行窗口'
 
 Write-Step '创建桌面快捷方式'
@@ -219,6 +220,7 @@ Write-Host '安装完成。下次开机登录 Windows 后会自动联网。' -Fo
 Write-Host "日志文件：$logFile"
 Write-Host '桌面已生成两个快捷方式：校园网设置 / 校园网立即登录'
 Write-Host '如需卸载，运行同目录下的 uninstall.ps1。'
+
 
 
 
