@@ -20,14 +20,14 @@ $ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Numerics
 
 # ======================== 默认配置 ========================
-$NjuptHost      = 'https://p.njupt.edu.cn:802'
-$NjuptPorts     = @(802, 804)
+$NjuptHost      = 'https://p.njupt.edu.cn:804'
+$NjuptPorts     = @(804, 802)
 $script:NjuptHost = $NjuptHost
 $NjuptApi       = "$NjuptHost/eportal/portal"
 $NjuptPageUrl   = 'https://p.njupt.edu.cn/a79.htm'
 $DefaultDrcomUrl = 'http://1.1.1.1/'
 $UserAgent      = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
-$JsVersion      = '4.5'
+$JsVersion      = '4.5.1'
 
 $Mode           = 'auto'          # auto / njupt / drcom
 $PortalUrl      = ''              # 旧版门户认证页；留空用 http://1.1.1.1/
@@ -298,21 +298,36 @@ function Invoke-NjuptLogin {
     $fullAccount = $Account + $Suffix
     $prefix = if ([string]$Config.account_prefix -eq '1') { ',0,' } else { '' }
     $prefixedAccount = $prefix + $fullAccount
-    $r2 = if ([int]$Config.en_md5 -eq 1) { '1' } else { '' }
+    $isBase64 = ([int]$Config.no_filter_accandpwd -eq 1)
+    $userAccount = if ($isBase64) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($prefixedAccount)) } else { $prefixedAccount }
+    $userPassword = if ($isBase64) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Password)) } else { $Password }
     $api = "$script:NjuptHost/eportal/portal"
     $loginBase = if ([int]$Config.login_method -eq 0) { "$script:NjuptHost/drcom" } else { $api }
 
+    # 新版门户页面 login_portal 的真实参数；不再使用旧的 DDDDD/upass/R1/R2/v4ip 组合
     $params = [ordered]@{
-        callback = 'dr1003'; DDDDD = $fullAccount; upass = $Password; '0MKKey' = '123456'
-        R1 = '0'; R2 = $r2; R3 = '0'; R6 = '0'; para = '00'; v6ip = ''
-        R7 = '0'; user_account = $prefixedAccount; user_password = $Password
-        v4ip = $ClientIp; R10 = '0'
-        wlan_user_ip = $ClientIp; wlan_user_ipv6 = ''; authex_enable = ''
-        wlan_user_mac = $WlanMac; wlan_ac_name = ''; jsVersion = $JsVersion
-        terminal_type = '1'; lang = 'zh-cn'; user_agent = $UserAgent
-        enable_r3 = '0'; mac_type = '0'; rcn = [string]$Config.rcn
-        operate = 'portal_login'; business_type = '0'
-        program_index = [string]$Config.program_index; page_index = [string]$Config.page_index
+        callback = 'dr1003'
+        login_method = [string]$Config.login_method
+        is_base64encode = if ($isBase64) { '1' } else { '0' }
+        user_account = $userAccount
+        user_password = $userPassword
+        wlan_user_ip = $ClientIp
+        wlan_user_ipv6 = ''
+        wlan_user_mac = '000000000000'
+        wlan_vlan_id = '0'
+        wlan_ac_ip = ''
+        wlan_ac_name = ''
+        authex_enable = ''
+        jsVersion = $JsVersion
+        uuid = ''
+        terminal_type = '1'
+        lang = 'zh-cn'
+        user_agent = $UserAgent
+        enable_r3 = [string]$Config.enable_r3
+        mac_type = '0'
+        rcn = [string]$Config.rcn
+        operate = 'portal_login'
+        business_type = '0'
         v = [string](Get-Random -Minimum 500 -Maximum 9999)
     }
     $pairs = foreach ($key in $params.Keys) {
@@ -849,6 +864,7 @@ try {
     if ($hasLock) { try { $mutex.ReleaseMutex() } catch { } }
     $mutex.Dispose()
 }
+
 
 
 
