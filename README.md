@@ -22,7 +22,7 @@ Windows 校园网自动登录脚本，支持两类常见的 Dr.COM 认证门户�
 - **不做定时轮询**：不会在游戏过程中反复弹窗
 - **完全静默**：计划任务通过 `wscript` 隐藏启动，不闪命令行窗口
 - **新版 / 旧版双适配**：
-  - 新版：处理 `rcn`、`account_prefix`、运营商后缀、`v4ip`/`R2`，使用真实网卡 MAC
+  - 新版：使用页面 `login_portal` 参数（`user_account`、`user_password`、`is_base64encode`、`jsVersion=4.5.1`）
   - 旧版：解析门户页面、服务名、`passwordEncrypt` 和 RSA 公钥
 - **可视化设置页**：本地网页填写账号、密码、认证方式、认证页地址
 - **自定义桌面图标**：深蓝渐变 ICO，设置和登录各一枚
@@ -88,7 +88,7 @@ wscript.exe "$env:LOCALAPPDATA\CampusAutoLogin\打开设置.vbs"
 | 密码 | 校园网密码 |
 | 运营商 | 中国移动 `@cmcc`（按需选择） |
 
-脚本会请求新版门户的配置接口，自动处理 `rcn`、`account_prefix` 和运营商后缀。
+脚本会请求新版门户的配置接口，自动处理 `account_prefix` 和运营商后缀，并使用新版页面的 `login_portal` 参数提交登录。
 
 ## 旧版门户怎么填
 
